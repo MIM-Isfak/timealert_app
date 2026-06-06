@@ -3,5 +3,3 @@ target/
 *.class
 *.jar
 HELP.md
-
-src/main/resources/application.properties
