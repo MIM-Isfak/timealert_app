@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 @Service
@@ -36,8 +38,10 @@ public class NotificationService {
 
     @Scheduled(cron = "0 * * * * *")
     public void checkAndSendNotifications() {
-        LocalDate today = LocalDate.now();
-        LocalTime now = LocalTime.now();
+        ZoneId colombo = ZoneId.of("Asia/Colombo");
+        ZonedDateTime nowColombo = ZonedDateTime.now(colombo);
+        LocalDate today = nowColombo.toLocalDate();
+        LocalTime now = nowColombo.toLocalTime();
 
         List<Event> events = eventRepository.findAll();
         List<PushSubscription> subscriptions = pushSubscriptionRepository.findAll();
@@ -50,7 +54,7 @@ public class NotificationService {
 
             // 30 min reminder
             if (minutesDiff >= 29 && minutesDiff <= 31 && !event.isNotified30()) {
-                String msg = "🔔 " + event.getTitle() +
+                String msg = "⏰ " + event.getTitle() +
                     " starts in 30 minutes! 📍 " + event.getLocation();
                 sendToAllSubscribers(subscriptions, msg);
                 event.setNotified30(true);
@@ -59,7 +63,7 @@ public class NotificationService {
 
             // 20 min reminder
             if (minutesDiff >= 19 && minutesDiff <= 21 && !event.isNotified20()) {
-                String msg = "⏰ " + event.getTitle() +
+                String msg = "⚠️ " + event.getTitle() +
                     " starts in 20 minutes! 📍 " + event.getLocation();
                 sendToAllSubscribers(subscriptions, msg);
                 event.setNotified20(true);
@@ -78,8 +82,6 @@ public class NotificationService {
     }
 
     private void sendToAllSubscribers(List<PushSubscription> subscriptions, String message) {
-
-        // PushService loop வெளியே create பண்றோம்
         PushService pushService;
         try {
             pushService = new PushService(publicKey, privateKey, subject);
