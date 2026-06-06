@@ -1,0 +1,14 @@
+# Secrets - NEVER commit these
+.env
+backend/.env
+frontend/.env
+
+# Spring Boot - secrets inside, never commit
+backend/src/main/resources/application.properties
+
+# Build output
+backend/target/
+
+# Node modules
+node_modules/
+frontend/node_modules/
