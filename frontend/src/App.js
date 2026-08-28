@@ -19,18 +19,16 @@ import {
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+if (!process.env.REACT_APP_API_URL) {
+  // eslint-disable-next-line no-console
+  console.error('[TimeAlert] REACT_APP_API_URL is not set. API calls will fall back to localhost — this will fail in production. Set the variable in frontend/.env before deploying.');
+}
 
 /* ─── Toast System ──────────────────────────────────────── */
 let toastId = 0;
 
 function useToasts() {
   const [toasts, setToasts] = useState([]);
-
-  const addToast = useCallback((type, title, message) => {
-    const id = ++toastId;
-    setToasts(prev => [...prev, { id, type, title, message, exiting: false }]);
-    setTimeout(() => dismissToast(id), 4500);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissToast = useCallback((id) => {
     setToasts(prev =>
@@ -40,6 +38,14 @@ function useToasts() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 280);
   }, []);
+
+  // dismissToast is declared above and included in deps so addToast never
+  // captures a stale closure — removing the eslint suppress that was masking this.
+  const addToast = useCallback((type, title, message) => {
+    const id = ++toastId;
+    setToasts(prev => [...prev, { id, type, title, message, exiting: false }]);
+    setTimeout(() => dismissToast(id), 4500);
+  }, [dismissToast]);
 
   return { toasts, addToast, dismissToast };
 }
@@ -101,6 +107,7 @@ function App() {
   const [token,     setToken]     = useState(localStorage.getItem('token') || null);
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '');
   const [userName,  setUserName]  = useState(localStorage.getItem('name')  || '');
+  const [isDemo,    setIsDemo]    = useState(localStorage.getItem('isDemo') === 'true');
 
   // Auth form state
   const [isRegistering, setIsRegistering] = useState(false);
@@ -115,7 +122,10 @@ function App() {
   const [loading,     setLoading]     = useState(false);
   const [fetching,    setFetching]    = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [darkMode,    setDarkMode]    = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [darkMode,    setDarkMode]    = useState(() => {
+    try { return localStorage.getItem('darkMode') === 'true'; }
+    catch { return false; }
+  });
   const [now,         setNow]         = useState(new Date());
 
   const { toasts, addToast, dismissToast } = useToasts();
@@ -140,9 +150,11 @@ function App() {
     localStorage.removeItem('token');
     localStorage.removeItem('email');
     localStorage.removeItem('name');
+    localStorage.removeItem('isDemo');
     setToken(null);
     setUserEmail('');
     setUserName('');
+    setIsDemo(false);
     setEvents([]);
   }, []);
 
@@ -220,6 +232,37 @@ function App() {
         setAuthError(error.response.data.message);
       } else {
         setAuthError('Authentication failed. Please try again.');
+      }
+    }
+    setLoading(false);
+  };
+
+  /* ── Guest demo login ─────────────────────────────────── */
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    setAuthError('');
+    try {
+      // No body needed — backend /demo takes no request body.
+      // Read isDemo from the response instead of hard-coding an email check.
+      const response = await axios.post(`${API_URL}/auth/demo`);
+      const { token: resToken, email: resEmail, name: resName, isDemo: resIsDemo } = response.data;
+
+      localStorage.setItem('token',  resToken);
+      localStorage.setItem('email',  resEmail);
+      localStorage.setItem('name',   resName);
+      localStorage.setItem('isDemo', resIsDemo ? 'true' : 'false');
+
+      setToken(resToken);
+      setUserEmail(resEmail);
+      setUserName(resName);
+      setIsDemo(!!resIsDemo);
+    } catch (error) {
+      if (!error.response) {
+        setAuthError('Cannot connect to the server. Please check your connection or try again later.');
+      } else if (error.response.status === 429) {
+        setAuthError('Too many attempts. Please wait a minute and try again.');
+      } else {
+        setAuthError('Could not start the demo. Please try again.');
       }
     }
     setLoading(false);
@@ -331,9 +374,11 @@ function App() {
 
   const sortedDates = Object.keys(groupedEvents).sort();
 
-  // User initials for avatar
+  // User initials for avatar.
+  // filter(Boolean) guards against leading/trailing/double spaces that produce
+  // empty string segments — n[0] on '' returns undefined which would render as "U".
   const initials = userName
-    ? userName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+    ? userName.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase()
     : userEmail.slice(0, 2).toUpperCase();
 
   /* ── Format date label ────────────────────────────────── */
@@ -344,7 +389,9 @@ function App() {
       String(now.getMonth() + 1).padStart(2, '0'),
       String(now.getDate()).padStart(2, '0'),
     ].join('-');
-    const tomorrowDate = new Date();
+    // Clone the `now` state value (not wall-clock new Date()) so tomorrowDate is
+    // consistent with how today was computed above — avoids a 30-second drift window.
+    const tomorrowDate = new Date(now);
     tomorrowDate.setDate(now.getDate() + 1);
     const tomorrowStr = [
       tomorrowDate.getFullYear(),
@@ -465,6 +512,19 @@ function App() {
               </button>
             </form>
 
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary auth-demo-btn"
+              onClick={handleDemoLogin}
+              disabled={loading}
+            >
+              👀 Try the live demo (no signup needed)
+            </button>
+
             <div className="auth-footer">
               {isRegistering ? (
                 <>Already have an account?{' '}
@@ -533,6 +593,12 @@ function App() {
           </button>
         </div>
       </nav>
+
+      {isDemo && (
+        <div className="demo-banner">
+          👋 You're in guest demo mode — sample data only, no real emails are sent. Sign up for a real account to get live notifications.
+        </div>
+      )}
 
       {/* ── Upload section ────────────────────────────────── */}
       <div className="section-card">

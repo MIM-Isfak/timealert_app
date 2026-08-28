@@ -12,6 +12,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Simple in-memory rate limiter scoped to the current JVM instance.
+ * Not shared across multiple instances — designed for single-instance deployment.
+ *
+ * Security note: X-Forwarded-For is trusted for IP extraction. In production,
+ * ensure this service is deployed behind a trusted reverse proxy (Heroku/Render/Railway)
+ * that sets this header — do not expose the app directly to the internet without a proxy.
+ */
 @Component
 public class RateLimitFilter implements Filter {
 
@@ -28,12 +36,14 @@ public class RateLimitFilter implements Filter {
     // Cleanup threshold: evict expired entries when map grows large
     private static final int CLEANUP_THRESHOLD = 5000;
 
+    private static final long WINDOW_MS = 60_000L;
+
     private static class IpRequestTracker {
         final long resetTime;
         final AtomicInteger count = new AtomicInteger(0);
 
-        IpRequestTracker(long durationMs) {
-            this.resetTime = System.currentTimeMillis() + durationMs;
+        IpRequestTracker() {
+            this.resetTime = System.currentTimeMillis() + WINDOW_MS;
         }
 
         boolean isExpired() {
@@ -65,18 +75,22 @@ public class RateLimitFilter implements Filter {
             // Use a composite key so auth and general limits are tracked independently per IP
             String trackerKey = ip + ":" + (isAuthOrUpload ? "auth" : "api");
 
-            IpRequestTracker tracker = trackers.compute(trackerKey, (key, existing) -> {
-                if (existing == null || existing.isExpired()) {
-                    return new IpRequestTracker(60_000L); // 1-minute window
-                }
-                return existing;
+            // Perform the increment atomically inside compute() to avoid a race window
+            // between tracker retrieval and count increment.
+            int[] currentCount = {0};
+            trackers.compute(trackerKey, (key, existing) -> {
+                IpRequestTracker tracker = (existing == null || existing.isExpired())
+                        ? new IpRequestTracker()
+                        : existing;
+                currentCount[0] = tracker.count.incrementAndGet();
+                return tracker;
             });
 
-            int currentCount = tracker.count.incrementAndGet();
-            if (currentCount > maxRequests) {
-                logger.warn("Rate limit exceeded for IP {} on path {} (count: {})", ip, path, currentCount);
+            if (currentCount[0] > maxRequests) {
+                logger.warn("Rate limit exceeded for IP {} on path {} (count: {})", ip, path, currentCount[0]);
                 httpResponse.setStatus(429);
                 httpResponse.setContentType("application/json");
+                httpResponse.setHeader("Retry-After", "60");
                 httpResponse.getWriter().write("{\"message\": \"Too many requests. Please try again in a minute.\"}");
                 return;
             }

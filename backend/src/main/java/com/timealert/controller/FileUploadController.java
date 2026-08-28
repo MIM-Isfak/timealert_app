@@ -63,7 +63,7 @@ public class FileUploadController {
 
         // Validate MIME type
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(java.util.Locale.ROOT))) {
             logger.warn("Upload rejected: unsupported content type '{}' for file '{}'",
                         contentType, file.getOriginalFilename());
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
@@ -95,7 +95,7 @@ public class FileUploadController {
         } catch (Exception e) {
             logger.error("File upload failed for user '{}': {}", auth.getName(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("message", "Upload failed: " + e.getMessage()));
+                    .body(Map.of("message", "Upload failed. Please try again or contact support."));
         }
     }
 

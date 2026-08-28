@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
+import java.util.Optional;
 
 @Component
 public class JwtUtil {
@@ -24,17 +25,25 @@ public class JwtUtil {
 
     private static final long EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000L; // 7 days
 
+    /**
+     * Validates the JWT secret on startup.
+     * SECURITY: throws IllegalStateException if the known-weak default is still in use,
+     * preventing the application from serving requests with a breakable signing key.
+     */
     @PostConstruct
     public void validateSecret() {
         if (secret == null || secret.length() < MIN_SECRET_LENGTH) {
-            logger.error("SECURITY: jwt.secret is too short (minimum {} characters). " +
-                         "Set a strong JWT_SECRET environment variable before deploying to production.", MIN_SECRET_LENGTH);
-        } else if (secret.equals(KNOWN_WEAK_FALLBACK) || secret.startsWith("timealert-secret-key")) {
-            logger.error("SECURITY CRITICAL: jwt.secret is using the known default fallback value. " +
-                         "This is INSECURE for production. Set a strong random JWT_SECRET in your environment variables.");
-        } else {
-            logger.info("JWT secret loaded successfully ({} characters).", secret.length());
+            throw new IllegalStateException(
+                "SECURITY: jwt.secret is too short (minimum " + MIN_SECRET_LENGTH + " characters). " +
+                "Set a strong JWT_SECRET environment variable before starting the application.");
         }
+        if (secret.equals(KNOWN_WEAK_FALLBACK) || secret.startsWith("timealert-secret-key")) {
+            throw new IllegalStateException(
+                "SECURITY CRITICAL: jwt.secret is the known default fallback value. " +
+                "This is INSECURE. Generate a strong secret with: openssl rand -hex 32 " +
+                "and set it as JWT_SECRET in your environment before starting.");
+        }
+        logger.info("JWT secret loaded successfully ({} characters).", secret.length());
     }
 
     private Key getKey() {
@@ -50,19 +59,21 @@ public class JwtUtil {
                 .compact();
     }
 
-    public String extractEmail(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
-    }
-
-    public boolean validateToken(String token) {
+    /**
+     * Parses the token once and returns the email subject if valid,
+     * or empty if the token is expired, malformed, or otherwise invalid.
+     * This replaces the previous two-parse pattern (validateToken + extractEmail)
+     * with a single HMAC verification per request.
+     */
+    public Optional<String> extractEmailIfValid(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(getKey()).build().parseClaimsJws(token);
-            return true;
+            String email = Jwts.parserBuilder()
+                    .setSigningKey(getKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .getSubject();
+            return Optional.ofNullable(email);
         } catch (ExpiredJwtException e) {
             logger.warn("JWT token expired: {}", e.getMessage());
         } catch (UnsupportedJwtException e) {
@@ -72,6 +83,6 @@ public class JwtUtil {
         } catch (Exception e) {
             logger.warn("JWT token validation failed: {}", e.getMessage());
         }
-        return false;
+        return Optional.empty();
     }
 }

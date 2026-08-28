@@ -49,8 +49,19 @@ public class NotificationService {
                 continue;
             }
 
+            // Never send real emails for the public demo account — LinkedIn/portfolio
+            // visitors can explore the full flow without triggering real SMTP sends.
+            if (user.isDemo()) {
+                continue;
+            }
+
             LocalTime startTime = event.getStartTime();
             long minutesDiff = java.time.Duration.between(now, startTime).toMinutes();
+
+            // Guard against midnight wraparound: Duration.between(23:30, 00:00) returns +30 min,
+            // which would falsely trigger the 30-min reminder. Skip events that have already
+            // started (negative diff) or are more than 35 minutes away (not actionable this tick).
+            if (minutesDiff < 0 || minutesDiff > 35) continue;
 
             boolean needsSave = false;
 
