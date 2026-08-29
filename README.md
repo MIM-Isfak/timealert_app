@@ -181,11 +181,6 @@ Dates: `YYYY-MM-DD`. Times: `HH:MM` (24-hour). Description and Location are opti
 
 > **Note for PDF uploads:** PDFBox extracts text and splits on commas — field values must not contain commas.
 
----
-
-## Screenshots
-
-> _Screenshots coming soon — add your own images in this section._
 
 ---
 
