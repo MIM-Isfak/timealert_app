@@ -1,13 +1,16 @@
 package com.timealert.controller;
 
 import com.timealert.model.Event;
+import com.timealert.model.Role;
 import com.timealert.model.User;
 import com.timealert.repository.EventRepository;
 import com.timealert.repository.UserRepository;
 import com.timealert.security.JwtUtil;
+import com.timealert.service.OwnerBootstrapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -35,6 +38,9 @@ public class AuthController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private OwnerBootstrapService ownerBootstrapService;
 
     private static final Pattern EMAIL_PATTERN =
         Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$");
@@ -76,13 +82,18 @@ public class AuthController {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
         user.setName(name);
+        user.setRole(Role.STUDENT); // New registrations always become STUDENT
+        if (ownerBootstrapService.isConfiguredOwner(email)) {
+            user.setRole(Role.OWNER);
+        }
         userRepository.save(user);
 
         String token = jwtUtil.generateToken(email);
         return ResponseEntity.ok(Map.of(
             "token", token,
             "email", email,
-            "name", name
+            "name", name,
+            "role", user.getRole().name()
         ));
     }
 
@@ -112,11 +123,14 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid email or password!"));
         }
 
+        ownerBootstrapService.syncOwnerRoleIfConfigured(user);
+
         String token = jwtUtil.generateToken(email);
         return ResponseEntity.ok(Map.of(
             "token", token,
             "email", email,
-            "name", user.getName()
+            "name", user.getName(),
+            "role", user.getRole().name()
         ));
     }
 
@@ -137,6 +151,7 @@ public class AuthController {
             u.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
             u.setName("Guest");
             u.setDemo(true);
+            u.setRole(Role.STUDENT);
             return userRepository.save(u);
         });
 
@@ -169,7 +184,27 @@ public class AuthController {
             "token", token,
             "email", DEMO_EMAIL,
             "name", "Guest",
+            "role", Role.STUDENT.name(),
             "isDemo", true
+        ));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> me(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Not authenticated"));
+        }
+        Optional<User> userOpt = userRepository.findByEmail(auth.getName());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "User not found"));
+        }
+        User user = userOpt.get();
+        ownerBootstrapService.syncOwnerRoleIfConfigured(user);
+        return ResponseEntity.ok(Map.of(
+            "id", user.getId(),
+            "email", user.getEmail(),
+            "name", user.getName() != null ? user.getName() : "",
+            "role", user.getRole().name()
         ));
     }
 

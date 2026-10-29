@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import './App.css';
 import NotificationSettings from './NotificationSettings';
+import OwnerRepManagement from './OwnerRepManagement';
+import RepBatchManagement from './RepBatchManagement';
+import StudentBatchView from './StudentBatchView';
 import { disconnectPush } from './pushClient';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
@@ -109,6 +112,7 @@ function App() {
   const [token,     setToken]     = useState(localStorage.getItem('token') || null);
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '');
   const [userName,  setUserName]  = useState(localStorage.getItem('name')  || '');
+  const [userRole,  setUserRole]  = useState(localStorage.getItem('role')  || 'STUDENT');
   const [isDemo,    setIsDemo]    = useState(localStorage.getItem('isDemo') === 'true');
 
   // Auth form state
@@ -156,10 +160,12 @@ function App() {
     try { await disconnectPush(API_URL, token, userEmail); } catch { /* Logout always completes. */ }
     localStorage.removeItem('email');
     localStorage.removeItem('name');
+    localStorage.removeItem('role');
     localStorage.removeItem('isDemo');
     setToken(null);
     setUserEmail('');
     setUserName('');
+    setUserRole('STUDENT');
     setIsDemo(false);
     setEvents([]);
     setLoggingOut(false);
@@ -185,6 +191,25 @@ function App() {
   useEffect(() => {
     if (token) fetchEvents();
   }, [token, fetchEvents]);
+
+  // Sync latest user role & profile on auth
+  useEffect(() => {
+    if (!token) return;
+    axios.get(`${API_URL}/auth/me`)
+      .then(res => {
+        if (res.data?.role) {
+          setUserRole(res.data.role);
+          localStorage.setItem('role', res.data.role);
+        }
+        if (res.data?.name) {
+          setUserName(res.data.name);
+          localStorage.setItem('name', res.data.name);
+        }
+      })
+      .catch(() => {
+        // me check fails gracefully if endpoint unavailable
+      });
+  }, [token]);
 
   // Live clock tick every 30s
   useEffect(() => {
@@ -218,15 +243,17 @@ function App() {
       const endpoint = isRegistering ? '/auth/register' : '/auth/login';
       const payload  = isRegistering ? { email, password, name } : { email, password };
       const response = await axios.post(`${API_URL}${endpoint}`, payload);
-      const { token: resToken, email: resEmail, name: resName } = response.data;
+      const { token: resToken, email: resEmail, name: resName, role: resRole } = response.data;
 
       localStorage.setItem('token', resToken);
       localStorage.setItem('email', resEmail);
       localStorage.setItem('name',  resName);
+      localStorage.setItem('role',  resRole || 'STUDENT');
 
       setToken(resToken);
       setUserEmail(resEmail);
       setUserName(resName);
+      setUserRole(resRole || 'STUDENT');
       setEmail('');
       setPassword('');
       setName('');
@@ -252,16 +279,18 @@ function App() {
       // No body needed — backend /demo takes no request body.
       // Read isDemo from the response instead of hard-coding an email check.
       const response = await axios.post(`${API_URL}/auth/demo`);
-      const { token: resToken, email: resEmail, name: resName, isDemo: resIsDemo } = response.data;
+      const { token: resToken, email: resEmail, name: resName, role: resRole, isDemo: resIsDemo } = response.data;
 
       localStorage.setItem('token',  resToken);
       localStorage.setItem('email',  resEmail);
       localStorage.setItem('name',   resName);
+      localStorage.setItem('role',   resRole || 'STUDENT');
       localStorage.setItem('isDemo', resIsDemo ? 'true' : 'false');
 
       setToken(resToken);
       setUserEmail(resEmail);
       setUserName(resName);
+      setUserRole(resRole || 'STUDENT');
       setIsDemo(!!resIsDemo);
     } catch (error) {
       if (!error.response) {
@@ -584,10 +613,13 @@ function App() {
             </span>
           </button>
 
-          {/* User pill */}
+          {/* User pill & Role badge */}
           <div className="user-pill">
             <div className="user-avatar">{initials}</div>
             <span className="user-pill-name">{userName || userEmail}</span>
+            <span className={`role-badge role-${(userRole || 'student').toLowerCase()}`}>
+              {userRole || 'STUDENT'}
+            </span>
           </div>
 
           {/* Logout */}
@@ -606,6 +638,17 @@ function App() {
         <div className="demo-banner">
           👋 You're in guest demo mode — sample data only, no real emails are sent. Sign up for a real account to get live notifications.
         </div>
+      )}
+
+      {/* ── Bounded Vertical Slice: Role-Specific Management ──────── */}
+      {userRole === 'OWNER' && (
+        <OwnerRepManagement apiUrl={API_URL} token={token} onToast={addToast} />
+      )}
+      {userRole === 'REP' && (
+        <RepBatchManagement apiUrl={API_URL} token={token} onToast={addToast} />
+      )}
+      {userRole === 'STUDENT' && (
+        <StudentBatchView apiUrl={API_URL} token={token} onToast={addToast} />
       )}
 
       <NotificationSettings apiUrl={API_URL} token={token} owner={userEmail} isDemo={isDemo} loggingOut={loggingOut} />

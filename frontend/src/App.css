@@ -1036,4 +1036,424 @@ body {
   .toast { min-width: unset; max-width: unset; }
   .user-pill-name { display: none; }
   .auth-card { padding: 24px; }
+  .batch-info-banner { flex-direction: column; align-items: stretch; }
+  .invitation-code-box { width: 100%; }
+  .join-form-row { flex-direction: column; }
+  .user-management-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .request-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+/* ── Role Badges ─────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.role-badge.role-owner {
+  background: #F3E8FF;
+  color: #6B21A8;
+  border-color: #E9D5FF;
+}
+
+.role-badge.role-rep {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+  border-color: #BFDBFE;
+}
+
+.role-badge.role-student {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.dark .role-badge.role-owner {
+  background: #3B0764;
+  color: #D8B4FE;
+  border-color: #581C87;
+}
+
+.dark .role-badge.role-rep {
+  background: #1E3A8A;
+  color: #93C5FD;
+  border-color: #1D4ED8;
+}
+
+.dark .role-badge.role-student {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* ── Section Subtitle & Headings ─────────────────────────── */
+.section-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-top: -12px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.subheading-card {
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.hint-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.mgmt-label-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Management Toolbar & Lists ──────────────────────────── */
+.management-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.management-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  background: var(--surface-subtle);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border);
+}
+
+.user-management-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-management-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--t-fast);
+}
+
+.user-management-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.user-mgmt-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-mgmt-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-mgmt-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-mgmt-email {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.user-mgmt-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Rep Batch Cards & Invitation Box ────────────────────── */
+.create-batch-card {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.batch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.batch-info-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.batch-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.batch-display-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.batch-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.invitation-code-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.invitation-code-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.invitation-code-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invitation-code-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 2px;
+}
+
+.invitation-code-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ── Join Requests List ──────────────────────────────────── */
+.request-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.request-student-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.request-student-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.request-student-email {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.request-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Approved Members Summary ────────────────────────────── */
+.approved-members-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.approved-member-pill {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  background: var(--green-bg);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.member-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--green-text);
+}
+
+.member-email {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* ── Student Membership View ─────────────────────────────── */
+.student-membership-card {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.student-membership-card.approved {
+  border-left: 4px solid var(--green);
+}
+
+.student-membership-card.pending {
+  border-left: 4px solid var(--amber);
+}
+
+.membership-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.membership-batch-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.membership-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.membership-rep-details {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.membership-rep-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rep-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.membership-pending-hint {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.student-empty-batch {
+  padding: 16px;
+  background: var(--surface-subtle);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.join-form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.join-input-wrap {
+  flex: 1;
+}
+
+.monospace-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.78rem;
 }
