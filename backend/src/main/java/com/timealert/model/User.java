@@ -42,6 +42,6 @@ public class User {
     private boolean demo = false;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, columnDefinition = "varchar(32) default 'STUDENT'")
+    @Column(name = "role", nullable = false, length = 32)
     private Role role = Role.STUDENT;
 }

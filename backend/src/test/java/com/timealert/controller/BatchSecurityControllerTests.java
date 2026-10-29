@@ -122,6 +122,28 @@ class BatchSecurityControllerTests {
     }
 
     @Test
+    void registrationWithoutRoleDefaultsToStudent() throws Exception {
+        when(userRepository.existsByEmail("defaultstudent@example.com")).thenReturn(false);
+        when(ownerBootstrapService.isConfiguredOwner("defaultstudent@example.com")).thenReturn(false);
+
+        Map<String, String> body = Map.of(
+                "email", "defaultstudent@example.com",
+                "password", "secret123",
+                "name", "Default Student"
+        );
+
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertEquals(Role.STUDENT, userCaptor.getValue().getRole());
+    }
+
+    @Test
     void registrationPromotesToOwnerIfConfiguredInEnvironment() throws Exception {
         when(userRepository.existsByEmail("envowner@example.com")).thenReturn(false);
         when(ownerBootstrapService.isConfiguredOwner("envowner@example.com")).thenReturn(true);
