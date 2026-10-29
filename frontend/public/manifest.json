@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "id": "/",
+  "short_name": "TimeAlert",
+  "name": "TimeAlert Timetable Notifications",
   "icons": [
     {
       "src": "favicon.ico",

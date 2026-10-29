@@ -42,6 +42,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local Web Push service secrets and generated state
+notification-service/node_modules/
+notification-service/.dev.vars
+notification-service/.dev.vars.*
+!notification-service/.dev.vars.example
+notification-service/.wrangler/
+notification-service/dist/
+notification-service/dist-*/
+notification-service/coverage/
+
 # Maven wrapper
 !backend/mvnw
 !backend/mvnw.cmd

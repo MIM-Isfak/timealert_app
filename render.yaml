@@ -1,0 +1,33 @@
+# Apply only after account, Neon database, Pages origin, and release confirmation.
+# No Render PostgreSQL resource is created. Auto-deploys remain disabled.
+services:
+  - type: web
+    name: timealert-pilot-api
+    runtime: docker
+    plan: free
+    branch: feature/timealert-student-alerts
+    autoDeployTrigger: 'off'
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: pilot
+      - key: LEGACY_EMAIL_REMINDERS_ENABLED
+        value: "false"
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PUSH_SERVICE_URL
+        sync: false
+      - key: PUSH_SERVICE_SECRET
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false

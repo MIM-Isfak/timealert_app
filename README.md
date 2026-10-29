@@ -1,52 +1,142 @@
 # TimeAlert
 
-> **Smart timetable reminders, right in your inbox.**
+Personal schedules and a shared batch timetable with representative ownership,
+approved student memberships, version history, acknowledgements, and Web Push
+reminders. CSV, Excel, and text-based PDF imports reuse the existing parser; no OCR.
 
-TimeAlert is a full-stack web application that lets students and professionals upload their class or work timetable (CSV, Excel, or PDF) and automatically receive email reminders at 30, 20, and 10 minutes before each event starts. Users authenticate with a secure JWT-based account, manage their schedule from a clean React dashboard, and can try the app instantly via a no-signup guest demo.
+## Pilot architecture
 
----
+| Component | Host | Configuration |
+| --- | --- | --- |
+| React / Create React App | Cloudflare Pages | Root `frontend`, Node 22, build `npm ci && npm run build:pilot`, output `build` |
+| Spring Boot / Java 17 | Render Free Web Service | [render.yaml](render.yaml), Docker build, `pilot` profile, `/actuator/health` |
+| PostgreSQL | Neon Free | External JDBC connection with SSL; no Render database resource |
+| Web Push reminders | Cloudflare Worker + SQLite Durable Object | [Worker configuration](notification-service/wrangler.jsonc), isolated `pilot` namespace |
 
-## Features
+Spring authenticates users and synchronizes timetable versions, memberships and
+preferences to the Worker. Durable Object alarms run scheduled jobs independently
+of Spring's uptime and the browser tab. Bridge failures remain pending until
+synchronization succeeds. Personal events stay separate. Legacy scheduled personal
+email reminders are explicitly disabled for the pilot; no SMTP account is required.
 
-- **Account authentication** — Register and log in with email + password (bcrypt-hashed, JWT sessions)
-- **Guest demo mode** — One-click "Try the demo" with pre-seeded sample events; no signup needed, no real emails sent
-- **Timetable upload** — Parse and import events from **CSV**, **Excel (.xlsx/.xls)**, or **PDF** files (up to 10 MB)
-- **Automated email reminders** — `@Scheduled` job fires every minute; sends Gmail SMTP notifications at 30 min, 20 min, and 10 min before each event
-- **Live schedule dashboard** — Events grouped by date with live status badges (Ongoing / Starts in Xm / Completed)
-- **Search & filter** — Real-time search across title, location, and description
-- **Dark mode** — Persisted in `localStorage`
-- **Per-event deletion** — Delete individual events or clear the entire schedule
-- **Rate limiting** — 30 req/min on auth/upload endpoints, 120 req/min on all other API paths
-- **Security hardening** — CORS environment-variable driven, JWT fail-fast on weak secret, formula-injection sanitization on file uploads, JSON 401 responses
+Approved students have next-event countdowns, today/current-week views in their
+batch timezone, four saved reminder options, and authenticated `.ics` downloads.
+Calendar files are snapshots with stable event IDs, versions and cancellation
+status. Export again after changes; calendar applications differ in handling
+reimports. Exports contain no student identities, public access tokens or alarms.
 
----
+## Deployment checklist — account confirmation required
 
-## System Architecture
+This repository does not create accounts or deploy Pages, Render or Neon
+automatically. Render automatic deployments are off. Keep Pages automatic builds
+off until approval. Use the feature branch and an approved commit; merging into
+`main` is unnecessary.
 
-```mermaid
-graph TD
-    A["React Frontend\n(Create React App, Axios)"]
-    B["Spring Boot REST API\n(Port 8080)"]
-    C["PostgreSQL Database\n(HikariCP connection pool)"]
-    D["Gmail SMTP\n(Spring Mail)"]
-    E["JWT Auth Flow"]
-    F["@Scheduled Notification Job\n(every 60 seconds)"]
+1. **Confirm accounts and names.** Confirm the Cloudflare account and final Pages
+   project/domain, Render workspace/service name/region, Neon project/branch/database,
+   owner bootstrap email, and release commit. Enter secrets through provider
+   dashboards or a private local secret store, never Git or chat.
+2. **Establish the origin and isolated storage.** After confirmation, reserve the
+   Pages project without publishing a build to establish its final HTTPS origin.
+   Create/select the empty Neon Free database. Install the four secrets below in
+   the separate `pilot` Worker environment and deploy it only after confirmation.
+   Never reuse test subscriptions/namespaces with a new database: user IDs overlap.
+3. **Deploy Render from `render.yaml`.** Set its service name/region to the confirmed
+   choices before applying (an omitted region uses Render's default). Enter the private environment values below.
+   Use JDBC format, e.g. `jdbc:postgresql://YOUR_NEON_HOST/YOUR_DATABASE?sslmode=require`,
+   with username/password supplied separately. `sslmode=require` encrypts the
+   connection; use `verify-full` with trusted CA configuration when certificate
+   identity verification is required. Verify `/actuator/health` returns only
+   `{"status":"UP"}` and CORS accepts only the final Pages origin. Initial pilot
+   schema creation uses Hibernate `update`; back up Neon before later releases.
+   Versioned migrations remain a broader-production boundary. Render builds the
+   Docker image; local Maven packaging does not test that image.
+4. **Publish Pages after confirmation.** Use root `frontend`, Node 22, build
+   `npm ci && npm run build:pilot`, output `build`, production branch
+   `feature/timealert-student-alerts`. Set `REACT_APP_API_URL` to the final Render
+   origin plus `/api`; rebuild whenever it changes. Verify login, membership,
+   timetable, countdown/views, calendar download and notification settings. Real
+   users and real-device push tests require separate approval. Health does not
+   prove push readiness or device delivery.
 
-    A -- "POST /api/auth/register\nPOST /api/auth/login\nPOST /api/auth/demo" --> B
-    A -- "GET /api/events\nPOST /api/upload\nDELETE /api/events/:id" --> B
-    B -- "JPA / Hibernate" --> C
-    B -- "JavaMailSender" --> D
-    F -- "findByEventDate(today)" --> C
-    F -- "sendEmail()" --> D
+### Render environment (server only)
 
-    subgraph "JWT Auth Flow"
-        E1["Client sends\nPOST /api/auth/login"]
-        E2["Server validates\ncredentials + returns JWT"]
-        E3["Client stores token\nin localStorage"]
-        E4["All subsequent requests\nuse Authorization: Bearer token"]
-        E5["JwtFilter validates\ntoken on every request"]
-        E1 --> E2 --> E3 --> E4 --> E5
-    end
+| Name | Value / handling |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `pilot` (Blueprint) |
+| `LEGACY_EMAIL_REMINDERS_ENABLED` | `false` (Blueprint) |
+| `PORT` | Supplied by Render; Spring binds `0.0.0.0:$PORT` |
+| `DB_URL` | Neon JDBC URL with SSL enabled; no embedded credentials |
+| `DB_USERNAME`, `DB_PASSWORD` | Private Neon credentials |
+| `JWT_SECRET` | Strong random value of at least 32 characters; retain across releases |
+| `ALLOWED_ORIGINS` | Single final HTTPS Pages origin, no path, wildcard, comma or trailing slash |
+| `PUSH_SERVICE_URL` | Isolated pilot Worker HTTPS origin |
+| `PUSH_SERVICE_SECRET` | Exactly the Worker's `INTERNAL_API_SECRET` |
+| `OWNER_EMAILS` | Confirmed bootstrap owner email; does not itself register a user |
+
+### Worker secrets (Cloudflare only)
+
+Install `INTERNAL_API_SECRET`, `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` and
+`VAPID_SUBJECT` as secrets for the selected environment. Keep VAPID keys stable;
+replacing them requires devices to subscribe again. The browser receives only the
+public key through Spring. No Worker secret belongs in a `REACT_APP_*` variable.
+See [Worker instructions](notification-service/README.md).
+
+The existing `test` Worker uses its existing secrets with
+`REMINDER_DELIVERY_ENABLED=false`: pending reminders are retained and alarms are
+disarmed during deployment checks. Resuming requires a separately approved change
+to `true`, deployment and reminder resynchronization. Manual test pushes remain
+an explicit separate operation. The prepared `pilot` environment enables alarms,
+uses its own namespace, and is not deployed by build commands.
+
+## Free-tier limitations
+
+- Render Free services sleep when idle; the next request can take about a minute
+  to start the backend. Login, changes and reminder synchronization can be delayed.
+  Do not use synthetic keep-alive polling. Already-scheduled Worker jobs continue
+  independently. See [Render Free limits](https://render.com/docs/free).
+- There is no exact-second delivery guarantee. Alarms, retries, connectivity,
+  provider throttling and browser/OS policies can delay or suppress notifications.
+  Devices need internet access for Web Push. Closing a tab is supported; OS
+  permission, browser support and background restrictions still apply.
+- Provider acceptance is **not confirmed device delivery**. Successful jobs record
+  acceptance only. Actual desktop/mobile timing must be verified on the authorized
+  pilot environment.
+- Pages, Workers/SQLite Durable Objects and Neon have free quotas. Exhausted quotas
+  or suspended compute can interrupt service. Monitor dashboards and keep backups.
+  No paid plan is selected here. See [Cloudflare Durable Object pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+  and [Neon plans](https://neon.com/pricing).
+
+Configuration references: [Render Blueprint](https://render.com/docs/blueprint-spec),
+[Pages builds](https://developers.cloudflare.com/pages/configuration/build-configuration/),
+[Neon JDBC](https://neon.com/docs/guides/java).
+
+## Local setup and verification
+
+Requirements: Java 17, Node 22, PostgreSQL. Copy `backend/.env.example` and
+`frontend/.env.example` to ignored `.env` files. Supply a strong local `JWT_SECRET`
+and local database credentials, then create the database; Hibernate creates tables.
+Use `LEGACY_EMAIL_REMINDERS_ENABLED=false` for SMTP-free local development. An
+unavailable Worker bridge shows synchronization pending without blocking timetable
+publication. Local Worker setup is documented in its README.
+
+```powershell
+# backend
+.\mvnw.cmd spring-boot:run
+.\mvnw.cmd package  # backend tests + executable JAR
+
+# frontend
+npm.cmd ci
+npm.cmd start
+npm.cmd test -- --watchAll=false --runInBand
+# Set the intended HTTPS REACT_APP_API_URL for this build; no publishing:
+npm.cmd run build:pilot
+
+# notification-service; tests mock outbound push
+npm.cmd ci
+npm.cmd test
+npm.cmd exec -- wrangler deploy --env test --dry-run --outdir dist-test
+npm.cmd exec -- wrangler deploy --env pilot --dry-run --outdir dist-pilot
 ```
 
 ---

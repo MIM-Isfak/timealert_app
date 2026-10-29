@@ -40,4 +40,8 @@ public class User {
     // sending for demo users so public LinkedIn visitors can't trigger real SMTP sends.
     @Column(name = "is_demo", nullable = false)
     private boolean demo = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 32)
+    private Role role = Role.STUDENT;
 }

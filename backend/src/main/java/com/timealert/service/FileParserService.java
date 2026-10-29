@@ -43,20 +43,32 @@ public class FileParserService {
     public static class ParseResult {
         private final int savedCount;
         private final List<String> skippedReasons;
+        private final List<Event> events;
 
-        public ParseResult(int savedCount, List<String> skippedReasons) {
+        public ParseResult(int savedCount, List<String> skippedReasons, List<Event> events) {
             this.savedCount = savedCount;
             this.skippedReasons = skippedReasons;
+            this.events = events;
         }
 
         public int getSavedCount() { return savedCount; }
         public List<String> getSkippedReasons() { return skippedReasons; }
+        public List<Event> getEvents() { return events; }
     }
 
     // ---------------------------------------------------------------------------
     // Entry point
     // ---------------------------------------------------------------------------
     public ParseResult parseFile(MultipartFile file, User user) throws IOException {
+        return parse(file, user, true);
+    }
+
+    /** Uses the same CSV/Excel/PDF parser without writing to personal event storage. */
+    public ParseResult parseForBatch(MultipartFile file) throws IOException {
+        return parse(file, null, false);
+    }
+
+    private ParseResult parse(MultipartFile file, User user, boolean persist) throws IOException {
         String rawFilename = file.getOriginalFilename();
 
         if (rawFilename == null || rawFilename.trim().isEmpty()) {
@@ -68,11 +80,11 @@ public class FileParserService {
         String lowerName = filename.toLowerCase();
 
         if (lowerName.endsWith(".csv")) {
-            return parseCSV(file, user);
+            return parseCSV(file, user, persist);
         } else if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
-            return parseExcel(file, user);
+            return parseExcel(file, user, persist);
         } else if (lowerName.endsWith(".pdf")) {
-            return parsePDF(file, user);
+            return parsePDF(file, user, persist);
         }
 
         throw new IllegalArgumentException("Unsupported file type! Please upload CSV, Excel (.xlsx/.xls), or PDF.");
@@ -81,7 +93,7 @@ public class FileParserService {
     // ---------------------------------------------------------------------------
     // CSV
     // ---------------------------------------------------------------------------
-    private ParseResult parseCSV(MultipartFile file, User user) throws IOException {
+    private ParseResult parseCSV(MultipartFile file, User user, boolean persist) throws IOException {
         List<Event> events = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
 
@@ -115,15 +127,15 @@ public class FileParserService {
             }
         }
 
-        List<Event> saved = eventRepository.saveAll(events);
-        logger.info("CSV upload: {} events saved, {} rows skipped.", saved.size(), skipped.size());
-        return new ParseResult(saved.size(), skipped);
+        List<Event> saved = persist ? eventRepository.saveAll(events) : events;
+        logger.info("CSV upload: {} events parsed, {} rows skipped.", saved.size(), skipped.size());
+        return new ParseResult(saved.size(), skipped, events);
     }
 
     // ---------------------------------------------------------------------------
     // Excel (.xlsx / .xls)
     // ---------------------------------------------------------------------------
-    private ParseResult parseExcel(MultipartFile file, User user) throws IOException {
+    private ParseResult parseExcel(MultipartFile file, User user, boolean persist) throws IOException {
         List<Event> events = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
 
@@ -159,9 +171,9 @@ public class FileParserService {
             }
         }
 
-        List<Event> saved = eventRepository.saveAll(events);
+        List<Event> saved = persist ? eventRepository.saveAll(events) : events;
         logger.info("Excel upload: {} events saved, {} rows skipped.", saved.size(), skipped.size());
-        return new ParseResult(saved.size(), skipped);
+        return new ParseResult(saved.size(), skipped, events);
     }
 
     // ---------------------------------------------------------------------------
@@ -169,7 +181,7 @@ public class FileParserService {
     // NOTE: PDF timetables must have no commas inside field values — commas are
     // used as delimiters. This is a known limitation of the text-extraction approach.
     // ---------------------------------------------------------------------------
-    private ParseResult parsePDF(MultipartFile file, User user) throws IOException {
+    private ParseResult parsePDF(MultipartFile file, User user, boolean persist) throws IOException {
         List<Event> events = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
 
@@ -209,9 +221,9 @@ public class FileParserService {
             }
         }
 
-        List<Event> saved = eventRepository.saveAll(events);
+        List<Event> saved = persist ? eventRepository.saveAll(events) : events;
         logger.info("PDF upload: {} events saved, {} rows skipped.", saved.size(), skipped.size());
-        return new ParseResult(saved.size(), skipped);
+        return new ParseResult(saved.size(), skipped, events);
     }
 
     // ---------------------------------------------------------------------------

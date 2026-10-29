@@ -1,0 +1,5 @@
+# Copy and fill privately, or use npm.cmd run setup:local (never overwrites).
+INTERNAL_API_SECRET=REPLACE_WITH_RANDOM_SERVER_ONLY_SECRET
+VAPID_PUBLIC_KEY=REPLACE_WITH_PUBLIC_P256_KEY
+VAPID_PRIVATE_KEY=REPLACE_WITH_PRIVATE_P256_KEY
+VAPID_SUBJECT=mailto:developer@example.com
