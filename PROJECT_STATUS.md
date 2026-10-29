@@ -98,3 +98,27 @@ npm.cmd run build
 - Notification-service tests: **13 passed, 0 failed**.
 - Isolated PostgreSQL HTTP smoke test: **passed** on a temporary loopback-only PostgreSQL cluster/database. REP created a batch and draft; draft was hidden from the approved student; publish exposed it; student acknowledged; REP edit advanced to v2 with history and invalidated the old acknowledgement; REP cancellation advanced to v3 and remained visible to the student with cancellation details.
 - Temporary JWT configuration and smoke accounts were generated only for the local process/test database. The isolated PostgreSQL cluster and backend process are stopped and removed after verification.
+
+---
+
+## Step 5: Durable batch reminder engine
+
+### Implementation summary
+
+- Added SQLite Durable Object tables for deterministic reminder jobs and per-device delivery state. Alarms wake for the next due job; an atomic SQLite claim prevents concurrent alarm executions from sending the same job at once. Jobs persist through Worker restarts and use bounded exponential retries, permanent-failure states, and expired-subscription cleanup for provider 404/410 responses.
+- Added authenticated internal schedule, event-version replace, cancel, member/preference sync, and safe summary operations. Spring calls them through the existing server-only authenticated bridge; pending setup is retained on events, memberships, and preferences and can be retried by an owning REP.
+- Added an IANA timezone to each batch (default `Asia/Colombo`), server-stored student reminder preferences, publish/approve/edit/cancel/device-registration synchronization, future-only reminder scheduling, and event-version job replacement. Existing personal events and their email reminders remain separate.
+- Added same-origin batch timetable notification links and service-worker rendering for title/type, local event time, and room. UI status describes provider acceptance as unconfirmed device delivery.
+- Student notification settings now include the four reminder options and separately show device notification state and timetable synchronization state. REP batch management includes timezone configuration and retry/status controls.
+
+### Verified checks
+
+- Backend Maven tests: **54 passed, 0 failed**.
+- Frontend tests: **39 passed, 0 failed** across 9 suites; frontend production build compiled successfully.
+- Notification Worker tests: **23 passed, 0 failed**. Coverage includes ordering across midnight, duplicate alarms, bounded retry/permanent failures, 404/410 cleanup, version replacement, member synchronization, and cancellation pushes; provider requests were mocked.
+- Worker bundle: **Wrangler dry-run passed** (39.81 KiB total upload estimate); no deployment was performed.
+- Isolated PostgreSQL HTTP smoke: **passed** for REP create/publish → approved student view/acknowledgement → REP edit/cancel. Verified draft invisibility, REP acknowledgement count, before/after history, and old-version acknowledgement invalidation. The temporary backend, PostgreSQL cluster, accounts, and data were stopped/removed afterward.
+
+### Live verification boundary
+
+- No Cloudflare deployment, Durable Object production migration, live push request, or production subscription test was performed. Provider acceptance is not confirmed device delivery. Live Worker alarm operation and real-device reminder timing remain to be verified after a separately authorized deployment.

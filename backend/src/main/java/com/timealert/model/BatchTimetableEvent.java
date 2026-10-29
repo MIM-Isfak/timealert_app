@@ -33,6 +33,7 @@ public class BatchTimetableEvent {
     @Column(nullable = false, updatable = false) private LocalDateTime createdAt;
     @Column(nullable = false) private LocalDateTime updatedAt;
     @Column(columnDefinition = "text") private String changeReason;
+    @Column(nullable = false, columnDefinition = "boolean not null default false") private boolean notificationSetupPending;
     @PrePersist void onCreate() { createdAt = LocalDateTime.now(); updatedAt = createdAt; }
     @PreUpdate void onUpdate() { updatedAt = LocalDateTime.now(); }
 }

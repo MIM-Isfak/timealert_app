@@ -28,6 +28,9 @@ public class Batch {
     @Column(name = "semester")
     private String semester;
 
+    @Column(name = "batch_timezone", nullable = false, length = 80, columnDefinition = "varchar(80) not null default 'Asia/Colombo'")
+    private String timezone = "Asia/Colombo";
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 

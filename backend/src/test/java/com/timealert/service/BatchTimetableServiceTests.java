@@ -21,6 +21,7 @@ class BatchTimetableServiceTests {
     @Mock BatchTimetableEventRepository events;
     @Mock BatchEventHistoryRepository history;
     @Mock BatchEventAcknowledgementRepository acknowledgements;
+    @Mock BatchReminderSyncService reminderSyncService;
     @InjectMocks BatchTimetableService service;
     User rep, otherRep, student;
     Batch batch;
@@ -66,6 +67,13 @@ class BatchTimetableServiceTests {
         assertEquals(BatchEventStatus.PUBLISHED,service.publish(rep,10L).get(0).getStatus());
         verify(events).save(any(BatchTimetableEvent.class));
     }
+    @Test void publishRemainsPublishedWhenReminderSynchronizationIsPending() {
+        BatchTimetableEvent draft=new BatchTimetableEvent();draft.setId(9L);draft.setBatch(batch);draft.setTitle("Published");draft.setEventDate(LocalDate.now().plusDays(1));draft.setStartTime(LocalTime.of(9,0));draft.setEndTime(LocalTime.of(10,0));draft.setType(BatchEventType.CLASS);
+        when(events.findByBatchIdOrderByEventDateAscStartTimeAsc(10L)).thenReturn(List.of(draft));
+        doAnswer(inv->{((BatchTimetableEvent)inv.getArgument(0)).setNotificationSetupPending(true);return false;}).when(reminderSyncService).syncPublishedEvent(draft);
+        assertEquals(BatchEventStatus.PUBLISHED,service.publish(rep,10L).get(0).getStatus());
+        assertTrue(draft.isNotificationSetupPending());
+    }
     @Test void editAndCancellationIncrementVersionAndRecordBeforeAfterHistory() {
         BatchTimetableEvent event=new BatchTimetableEvent(); event.setId(7L); event.setBatch(batch); event.setTitle("Old"); event.setEventDate(LocalDate.now().plusDays(1)); event.setStartTime(LocalTime.of(9,0)); event.setEndTime(LocalTime.of(10,0)); event.setType(BatchEventType.CLASS); event.setStatus(BatchEventStatus.PUBLISHED); event.setVersion(1);
         when(events.findById(7L)).thenReturn(Optional.of(event)); when(events.existsByBatchIdAndEventDateAndStartTimeAndTitle(anyLong(),any(),any(),anyString())).thenReturn(false); when(events.save(any())).thenAnswer(i->i.getArgument(0));
@@ -74,6 +82,7 @@ class BatchTimetableServiceTests {
         BatchTimetableEvent cancelled=service.cancel(rep,10L,7L,"Class called off");
         assertEquals(3,cancelled.getVersion()); assertEquals(BatchEventStatus.CANCELLED,cancelled.getStatus());
         verify(history).save(argThat(h->h.getAction().equals("CANCELLED")&&h.getReason().equals("Class called off")));
+        verify(reminderSyncService).syncPublishedEvent(edited); verify(reminderSyncService).syncCancelledEvent(cancelled);
         assertThrows(IllegalArgumentException.class,()->service.cancel(rep,10L,7L," "));
     }
     @Test void acknowledgementIsCurrentVersionOnlyAndCrossBatchIsForbidden() {

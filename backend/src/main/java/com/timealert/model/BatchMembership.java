@@ -38,4 +38,7 @@ public class BatchMembership {
 
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
+
+    @Column(name = "notification_setup_pending", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean notificationSetupPending;
 }

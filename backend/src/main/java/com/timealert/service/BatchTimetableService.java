@@ -17,6 +17,7 @@ public class BatchTimetableService {
     @Autowired private BatchTimetableEventRepository events;
     @Autowired private BatchEventHistoryRepository history;
     @Autowired private BatchEventAcknowledgementRepository acknowledgements;
+    @Autowired private BatchReminderSyncService reminderSyncService;
     private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
     private Batch batch(Long id) { return batches.findById(id).orElseThrow(() -> new NoSuchElementException("Batch not found.")); }
@@ -67,7 +68,7 @@ public class BatchTimetableService {
     }
     @Transactional public List<BatchTimetableEvent> publish(User rep, Long batchId) {
         Batch b=batch(batchId); owner(rep,b); List<BatchTimetableEvent> out=events.findByBatchIdOrderByEventDateAscStartTimeAsc(batchId);
-        out.stream().filter(e -> e.getStatus()==BatchEventStatus.DRAFT).forEach(e -> e.setStatus(BatchEventStatus.PUBLISHED)); return out;
+        out.stream().filter(e -> e.getStatus()==BatchEventStatus.DRAFT).forEach(e -> { e.setStatus(BatchEventStatus.PUBLISHED); if(reminderSyncService!=null)reminderSyncService.syncPublishedEvent(e); }); return out;
     }
     @Transactional public BatchTimetableEvent edit(User rep, Long batchId, Long id, Map<String,Object> body) {
         Batch b=batch(batchId); owner(rep,b); BatchTimetableEvent e=event(batchId,id);
@@ -75,11 +76,11 @@ public class BatchTimetableService {
         String before=json(e); String title=(String)body.getOrDefault("title",e.getTitle()); LocalDate date=LocalDate.parse(String.valueOf(body.getOrDefault("eventDate",e.getEventDate()))); LocalTime start=LocalTime.parse(String.valueOf(body.getOrDefault("startTime",e.getStartTime()))); LocalTime end=LocalTime.parse(String.valueOf(body.getOrDefault("endTime",e.getEndTime()))); validate(title,date,start,end);
         if(events.existsByBatchIdAndEventDateAndStartTimeAndTitle(batchId,date,start,title) && !(date.equals(e.getEventDate())&&start.equals(e.getStartTime())&&title.equals(e.getTitle()))) throw new IllegalArgumentException("Duplicate timetable occurrence.");
         e.setTitle(title); e.setDescription((String)body.getOrDefault("description",e.getDescription())); e.setEventDate(date); e.setStartTime(start); e.setEndTime(end); e.setLocation((String)body.getOrDefault("location",e.getLocation())); if(body.containsKey("type"))e.setType(type(body.get("type"))); e.setVersion(e.getVersion()+1); e.setChangeReason((String)body.get("reason"));
-        BatchTimetableEvent saved=events.save(e); if(saved.getStatus()==BatchEventStatus.PUBLISHED)record(saved,"UPDATED",before,saved.getChangeReason()); return saved;
+        BatchTimetableEvent saved=events.save(e); if(saved.getStatus()==BatchEventStatus.PUBLISHED){record(saved,"UPDATED",before,saved.getChangeReason()); if(reminderSyncService!=null)reminderSyncService.syncPublishedEvent(saved);} return saved;
     }
     @Transactional public BatchTimetableEvent cancel(User rep, Long batchId, Long id, String reason) {
         Batch b=batch(batchId); owner(rep,b); if(reason==null||reason.isBlank()) throw new IllegalArgumentException("A cancellation reason is required."); if(reason.length()>1000) throw new IllegalArgumentException("Cancellation reason is too long."); BatchTimetableEvent e=event(batchId,id); if(e.getStatus()==BatchEventStatus.CANCELLED) return e;
-        String before=json(e); e.setVersion(e.getVersion()+1); e.setStatus(BatchEventStatus.CANCELLED); e.setChangeReason(reason); BatchTimetableEvent saved=events.save(e); if(!before.contains("DRAFT"))record(saved,"CANCELLED",before,reason); return saved;
+        boolean wasPublished=e.getStatus()==BatchEventStatus.PUBLISHED; String before=json(e); e.setVersion(e.getVersion()+1); e.setStatus(BatchEventStatus.CANCELLED); e.setChangeReason(reason); BatchTimetableEvent saved=events.save(e); if(wasPublished){record(saved,"CANCELLED",before,reason); if(reminderSyncService!=null)reminderSyncService.syncCancelledEvent(saved);} return saved;
     }
     @Transactional public boolean acknowledge(User student, Long batchId, Long id) {
         Batch b=batch(batchId); student(student,b); BatchTimetableEvent e=event(batchId,id); if(e.getStatus()!=BatchEventStatus.PUBLISHED) throw new IllegalStateException("Only published events can be acknowledged.");

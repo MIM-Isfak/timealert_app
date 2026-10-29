@@ -53,6 +53,19 @@ public class PushBridgeService {
     public Result test(Long userId, String deviceId) {
         return exchange("/internal/test", Map.of("userId", userId.toString(), "deviceId", deviceId), false);
     }
+    public Result reminderReplace(Long batchId, Long eventId, int version, Map<String,Object> event, java.util.List<Map<String,Object>> recipients) {
+        return exchange("/internal/reminders/replace", Map.of("batchId",batchId.toString(),"eventId",eventId.toString(),"version",version,"event",event,"recipients",recipients), false);
+    }
+    public Result reminderCancel(Long batchId, Long eventId, int version, Map<String,Object> event, java.util.List<String> recipients, String reason) {
+        return exchange("/internal/reminders/cancel", Map.of("batchId",batchId.toString(),"eventId",eventId.toString(),"version",version,"event",event,"recipients",recipients,"reason",reason), false);
+    }
+    public Result reminderSync(Long userId, Long batchId, java.util.List<Map<String,Object>> jobs) {
+        return reminderSync(userId,batchId,jobs,false);
+    }
+    public Result reminderSync(Long userId, Long batchId, java.util.List<Map<String,Object>> jobs, boolean revoke) {
+        return exchange("/internal/reminders/sync", Map.of("userId",userId.toString(),"batchId",batchId.toString(),"jobs",jobs,"revoke",revoke), false);
+    }
+    public Result reminderSummary(Long batchId) { return exchange("/internal/reminders/summary?batchId="+batchId,null,false); }
 
     private Result exchange(String path, Object body, boolean delete) {
         if (!configured()) return failure(503, "setup_pending");
@@ -76,6 +89,13 @@ public class PushBridgeService {
                     if (bytes.length > 8192) return failure(503, "unavailable");
                     JsonNode data = mapper.readTree(bytes);
                     String state = data.path("status").asText();
+                    if (path.startsWith("/internal/reminders/") && Set.of("scheduled","replaced","cancelled","synced","ready").contains(state)) {
+                        Map<String,Object> safe = new java.util.LinkedHashMap<>(); safe.put("status",state);
+                        if(data.path("count").canConvertToInt()) safe.put("count",data.path("count").asInt());
+                        if(data.path("counts").isObject()) safe.put("counts",mapper.convertValue(data.path("counts"),Map.class));
+                        if(data.path("nextAlarmAt").canConvertToLong()) safe.put("nextAlarmAt",data.path("nextAlarmAt").asLong());
+                        return new Result(status, safe);
+                    }
                     if (path.endsWith("public-key") && state.equals("ready") &&
                             data.path("publicKey").asText().matches("B[A-Za-z0-9_-]{86}")) {
                         return new Result(200, Map.of("status", "ready", "publicKey", data.get("publicKey").asText()));

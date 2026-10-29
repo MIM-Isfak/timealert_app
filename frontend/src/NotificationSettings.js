@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { enablePush, disconnectPush, homeScreenHint, inspectPush, pushError, pushSession, testPush } from './pushClient';
+import BatchReminderPreferences from './BatchReminderPreferences';
 const labels = {
   loading: 'Checking notification setup…', unsupported: 'Notifications are unavailable in this browser or context.',
   'permission-required': 'Enable notifications to receive alerts on this device, even when the tab is closed.',
@@ -7,7 +8,7 @@ const labels = {
   'setup-pending': 'Notifications are awaiting server setup. Your timetable still works.',
   enabled: 'Enabled on this device.', error: 'Could not check notification setup.',
 };
-export default function NotificationSettings({ apiUrl, token, owner, isDemo, loggingOut }) {
+export default function NotificationSettings({ apiUrl, token, owner, isDemo, loggingOut, userRole }) {
   const [setup, setSetup] = useState({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -54,7 +55,8 @@ export default function NotificationSettings({ apiUrl, token, owner, isDemo, log
     } finally { setBusy(false); }
   };
   const disabled = busy || loggingOut;
-  return <section className="section-card notification-settings" aria-labelledby="notification-heading">
+  return <>
+  <section className="section-card notification-settings" aria-labelledby="notification-heading">
     <h2 id="notification-heading">Device notifications</h2>
     {isDemo ? <p>Sign in with a personal account to enable device notifications.</p> : <>
       <p role="status">{labels[setup.state]}</p>
@@ -68,5 +70,7 @@ export default function NotificationSettings({ apiUrl, token, owner, isDemo, log
         <button className="btn btn-secondary" disabled={disabled} onClick={refresh}>Check again</button>
       </div>
     </>}
-  </section>;
+  </section>
+  {!isDemo && userRole === 'STUDENT' && <BatchReminderPreferences apiUrl={apiUrl} token={token} deviceState={setup.state} />}
+  </>;
 }

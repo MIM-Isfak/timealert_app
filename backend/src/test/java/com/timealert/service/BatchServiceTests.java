@@ -28,6 +28,9 @@ class BatchServiceTests {
     private BatchMembershipRepository membershipRepository;
 
     @Mock
+    private BatchReminderSyncService reminderSyncService;
+
+    @Mock
     private UserRepository userRepository;
 
     @InjectMocks
@@ -139,6 +142,14 @@ class BatchServiceTests {
     }
 
     @Test
+    void batchTimezoneAcceptsIanaZoneAndRejectsInvalidValues() {
+        when(batchRepository.findById(501L)).thenReturn(Optional.of(batch1));
+        when(batchRepository.save(any(Batch.class))).thenAnswer(inv->inv.getArgument(0));
+        assertEquals("Asia/Tokyo",batchService.updateBatch(rep1,501L,null,null,null,null,"Asia/Tokyo").getTimezone());
+        assertThrows(IllegalArgumentException.class,()->batchService.updateBatch(rep1,501L,null,null,null,null,"Not/A_Zone"));
+    }
+
+    @Test
     void studentCanSubmitJoinRequestWithValidCode() {
         when(batchRepository.findByInvitationCode("CODE501A")).thenReturn(Optional.of(batch1));
         when(membershipRepository.findByBatchIdAndStudentId(501L, 100L)).thenReturn(Optional.empty());
@@ -235,6 +246,7 @@ class BatchServiceTests {
 
         assertEquals(MembershipStatus.APPROVED, approved.getStatus());
         assertNotNull(approved.getReviewedAt());
+        verify(reminderSyncService).syncMembership(approved);
     }
 
     @Test

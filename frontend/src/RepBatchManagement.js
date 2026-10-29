@@ -23,6 +23,8 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
   const [actionInProgress, setActionInProgress] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState(null);
+  const [timezone, setTimezone] = useState('Asia/Colombo');
+  const [timezoneBusy, setTimezoneBusy] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -156,6 +158,16 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
   };
 
   const activeBatch = batches.find(batch => batch.id === selectedBatchId) || batches[0] || null;
+  useEffect(() => { if (activeBatch?.timezone) setTimezone(activeBatch.timezone); }, [activeBatch?.id, activeBatch?.timezone]);
+  const saveTimezone = async () => {
+    setTimezoneBusy(true);
+    try {
+      const response = await axios.put(`${apiUrl}/batches/${activeBatch.id}`, { timezone }, { headers: { Authorization: `Bearer ${token}` } });
+      setBatches(current => current.map(batch => batch.id === activeBatch.id ? response.data : batch));
+      onToast?.('success', 'Timezone saved', response.data.notificationSetupPending ? 'Reminder synchronization is pending. Retry it after the Worker is available.' : 'Future reminders use this batch timezone.');
+    } catch (err) { onToast?.('error', 'Timezone not saved', err.response?.data?.message || 'Enter a valid IANA timezone.'); }
+    finally { setTimezoneBusy(false); }
+  };
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
   const approvedMembers = requests.filter(r => r.status === 'APPROVED');
 
@@ -246,6 +258,7 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
         <div className="batch-active-workspace">
           {batches.length > 1 && <div className="form-group" style={{ marginBottom: 16 }}><label htmlFor="managed-batch">Select batch to manage</label><select id="managed-batch" className="search-input" value={activeBatch.id} onChange={e => { const id = Number(e.target.value); setSelectedBatchId(id); fetchRequests(id); }}>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>}
           <BatchTimetableManagement apiUrl={apiUrl} token={token} batchId={activeBatch.id} onToast={onToast} />
+          <div className="batch-info-banner" style={{ marginTop: 16 }}><div className="form-group" style={{ flex: 1 }}><label htmlFor="batch-timezone">Batch timezone (IANA)</label><input id="batch-timezone" className="search-input" value={timezone} onChange={e => setTimezone(e.target.value)} placeholder="Asia/Colombo" /><span className="notification-hint">Local timetable times are converted using this timezone.</span></div><button className="btn btn-secondary" onClick={saveTimezone} disabled={timezoneBusy}>{timezoneBusy ? 'Saving…' : 'Save timezone'}</button><button className="btn btn-secondary" onClick={async () => { try { const response = await axios.post(`${apiUrl}/batches/${activeBatch.id}/timetable/notifications/resync`, {}, { headers: { Authorization: `Bearer ${token}` } }); onToast?.(response.data.notificationSetupPending ? 'info' : 'success', response.data.notificationSetupPending ? 'Reminder sync pending' : 'Reminder sync ready', response.data.notificationSetupPending ? 'Use retry after server setup is available.' : 'Upcoming timetable reminders are synchronized.'); } catch (e) { onToast?.('error', 'Resynchronization failed', e.response?.data?.message || 'Could not retry reminder setup.'); } }}>Retry reminder sync</button></div>
           {/* Batch Details Card */}
           <div className="batch-info-banner">
             <div className="batch-info-main">

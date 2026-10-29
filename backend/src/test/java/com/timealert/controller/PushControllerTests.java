@@ -5,6 +5,7 @@ import com.timealert.model.User;
 import com.timealert.repository.UserRepository;
 import com.timealert.security.*;
 import com.timealert.service.PushBridgeService;
+import com.timealert.service.BatchReminderSyncService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,7 @@ class PushControllerTests {
     @Autowired JwtUtil jwt;
     @MockitoBean UserRepository users;
     @MockitoBean PushBridgeService bridge;
+    @MockitoBean BatchReminderSyncService reminderSync;
     static final AtomicLong ids = new AtomicLong(100);
     static final String DEVICE = "11111111-1111-4111-8111-111111111111";
     User user;
@@ -61,6 +63,7 @@ class PushControllerTests {
         verifyNoInteractions(bridge);
     }
     @Test void registrationDerivesStableDatabaseIdFromJwtAccount() throws Exception {
+        when(reminderSync.syncForUser(user.getId())).thenReturn(true);
         when(bridge.register(eq(user.getId()), any(JsonNode.class)))
                 .thenReturn(new PushBridgeService.Result(200, Map.of("status", "registered", "deviceId", DEVICE)));
         mvc.perform(post("/api/push/subscriptions").header("Authorization", auth)

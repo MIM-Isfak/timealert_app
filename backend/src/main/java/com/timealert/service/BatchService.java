@@ -22,6 +22,8 @@ public class BatchService {
 
     @Autowired
     private BatchMembershipRepository membershipRepository;
+    @Autowired
+    private BatchReminderSyncService reminderSyncService;
 
     public String generateUniqueInvitationCode() {
         for (int attempt = 0; attempt < 20; attempt++) {
@@ -85,6 +87,11 @@ public class BatchService {
 
     @Transactional
     public Batch updateBatch(User rep, Long batchId, String name, String academicYear, String semester, Boolean active) {
+        return updateBatch(rep,batchId,name,academicYear,semester,active,null);
+    }
+
+    @Transactional
+    public Batch updateBatch(User rep, Long batchId, String name, String academicYear, String semester, Boolean active, String timezone) {
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new NoSuchElementException("Batch not found."));
 
@@ -106,6 +113,11 @@ public class BatchService {
         }
         if (active != null) {
             batch.setActive(active);
+        }
+        if (timezone != null) {
+            String value=timezone.trim();
+            try { java.time.ZoneId.of(value); } catch (java.time.DateTimeException ex) { throw new IllegalArgumentException("Timezone must be a valid IANA zone, such as Asia/Colombo."); }
+            batch.setTimezone(value);
         }
 
         return batchRepository.save(batch);
@@ -140,7 +152,9 @@ public class BatchService {
 
         membership.setStatus(MembershipStatus.APPROVED);
         membership.setReviewedAt(LocalDateTime.now());
-        return membershipRepository.save(membership);
+        BatchMembership saved=membershipRepository.save(membership);
+        if(reminderSyncService!=null) reminderSyncService.syncMembership(saved);
+        return saved;
     }
 
     @Transactional
@@ -161,7 +175,9 @@ public class BatchService {
 
         membership.setStatus(MembershipStatus.REJECTED);
         membership.setReviewedAt(LocalDateTime.now());
-        return membershipRepository.save(membership);
+        BatchMembership saved=membershipRepository.save(membership);
+        if(reminderSyncService!=null) reminderSyncService.syncMembership(saved);
+        return saved;
     }
 
     @Transactional

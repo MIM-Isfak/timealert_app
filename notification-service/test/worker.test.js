@@ -4,7 +4,7 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, createFetchMock } from 'miniflare';
 import { validEndpoint } from '../src/validation.js';
-import { mkdirSync, mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // In-memory test credentials and fake subscriptions only. No real push recipients.
@@ -27,7 +27,7 @@ before(async () => {
     compatibilityDate: '2026-07-30',
     durableObjects: { PUSH_STORE: { className: 'PushStore', useSQLite: true } },
     bindings: { INTERNAL_API_SECRET: secret, VAPID_PUBLIC_KEY: vapid.publicKey,
-      VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_SUBJECT: 'mailto:test@example.com' }, fetchMock: mock,
+      VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_SUBJECT: 'mailto:test@example.com', TEST_MODE: 'true' }, fetchMock: mock,
   };
   mf = new Miniflare(options);
 });
@@ -42,6 +42,12 @@ function sub(name) {
   return { endpoint: 'https://fcm.googleapis.com/wp/' + name, expirationTime: null,
     keys: { p256dh: keys().publicKey, auth: randomBytes(16).toString('base64url') } };
 }
+async function replaceEventReminder({ batchId='8001', eventId, version=1, userId='8002', startAt, type='CLASS', reminderMinutes=[5] }) {
+  const response=await call('/internal/reminders/replace',{batchId,eventId,version,event:{title:`Event ${eventId}`,type,startAt,timeLabel:'2026-10-30 09:00 (Asia/Colombo)',location:'Room 7',url:`/?batchId=${batchId}&eventId=${eventId}`},recipients:[{userId,reminderMinutes}]});
+  assert.equal(response.status,200); return response.json();
+}
+async function alarm(now) { return call('/internal/reminders/_alarm',{now}); }
+async function summary(batchId) { return (await call(`/internal/reminders/summary?batchId=${batchId}`,null,'GET')).json(); }
 async function register(userId, subscription) {
   const response = await call('/internal/subscriptions', { userId, subscription });
   assert.equal(response.status, 200);
@@ -137,7 +143,7 @@ test('SQLite device ownership survives a local runtime restart', async () => {
     runtime = new Miniflare(savedOptions);
     assert.equal((await invoke('device', { userId: '5000', deviceId })).status, 200);
     assert.equal((await invoke('device', { userId: '5001', deviceId })).status, 404);
-  } finally { await runtime.dispose(); }
+  } finally { await runtime.dispose(); rmSync(persist, { recursive: true, force: true }); }
 });
 test('a subscription past its browser expiration time is removed without a push request', async () => {
   const subscription = { ...sub('time-expired'), expirationTime: Date.now() + 1000 };
@@ -145,4 +151,92 @@ test('a subscription past its browser expiration time is removed without a push 
   await new Promise(resolve => setTimeout(resolve, 1100));
   assert.equal((await call('/internal/test', { userId: '5002', deviceId: id })).status, 410);
   assert.equal((await call('/internal/device', { userId: '5002', deviceId: id })).status, 404);
+});
+
+test('alarm orders jobs across UTC midnight and persists the next alarm time', async () => {
+  const userId='8100', batchId='8101', deviceId=await register(userId,sub('midnight'));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/midnight',method:'POST'}).reply(201,'').times(2);
+  const midnight=Math.ceil(Date.now()/86_400_000)*86_400_000;
+  const first=midnight-30_000, second=midnight+30_000;
+  await replaceEventReminder({batchId,eventId:'8102',userId,startAt:first+300_000});
+  await replaceEventReminder({batchId,eventId:'8103',userId,startAt:second+300_000});
+  assert.equal((await summary(batchId)).nextAlarmAt,first);
+  await alarm(first);
+  assert.equal((await summary(batchId)).nextAlarmAt,second);
+  await alarm(second);
+  const counts=(await summary(batchId)).counts;
+  assert.equal(counts.DELIVERED,2); assert.equal(counts.PENDING,0);
+  assert.equal((await call('/internal/device',{userId,deviceId})).status,200);
+});
+
+test('duplicate alarm execution does not resend an accepted job', async () => {
+  const userId='8200', batchId='8201'; await register(userId,sub('once'));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/once',method:'POST'}).reply(201,'').times(1);
+  const due=Date.now()+60_000; await replaceEventReminder({batchId,eventId:'8202',userId,startAt:due+300_000});
+  await alarm(due); await alarm(due+1);
+  assert.equal((await summary(batchId)).counts.DELIVERED,1);
+});
+
+test('temporary provider failures retry with bounded exponential backoff', async () => {
+  const userId='8300', batchId='8301'; await register(userId,sub('retry'));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/retry',method:'POST'}).reply(503,'').times(4);
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/retry',method:'POST'}).reply(201,'').times(1);
+  const due=Date.now()+120_000; await replaceEventReminder({batchId,eventId:'8302',userId,startAt:due+300_000});
+  await alarm(due); const waiting=await summary(batchId);
+  assert.equal(waiting.counts.RETRY,1); assert.equal(waiting.nextAlarmAt,due+60_000);
+  await alarm(due+60_000); assert.equal((await summary(batchId)).nextAlarmAt,due+180_000);
+  await alarm(due+180_000); assert.equal((await summary(batchId)).nextAlarmAt,due+420_000);
+  await alarm(due+420_000); assert.equal((await summary(batchId)).nextAlarmAt,due+900_000);
+  await alarm(due+900_000); assert.equal((await summary(batchId)).counts.DELIVERED,1);
+});
+
+test('retry exhaustion records FAILED after the bounded attempt count', async () => {
+  const userId='8350',batchId='8351';await register(userId,sub('exhausted'));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/exhausted',method:'POST'}).reply(503,'').times(5);
+  const due=Date.now()+150_000;await replaceEventReminder({batchId,eventId:'8352',userId,startAt:due+300_000});
+  for(const offset of [0,60_000,180_000,420_000,900_000])await alarm(due+offset);
+  assert.equal((await summary(batchId)).counts.FAILED,1);
+});
+
+test('permanent provider failures become FAILED and never count as accepted', async () => {
+  const userId='8400', batchId='8401'; await register(userId,sub('permanent'));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/permanent',method:'POST'}).reply(403,'');
+  const due=Date.now()+180_000; await replaceEventReminder({batchId,eventId:'8402',userId,startAt:due+300_000});
+  await alarm(due); const counts=(await summary(batchId)).counts;
+  assert.equal(counts.FAILED,1); assert.equal(counts.DELIVERED,0);
+});
+
+for (const status of [404,410]) test(`reminder provider ${status} expires the subscription and fails its job`, async () => {
+  const userId=String(8500+status), batchId=String(8600+status); const deviceId=await register(userId,sub('reminder-expired'+status));
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/reminder-expired'+status,method:'POST'}).reply(status,'');
+  const due=Date.now()+240_000; await replaceEventReminder({batchId,eventId:String(8700+status),userId,startAt:due+300_000});
+  await alarm(due); assert.equal((await summary(batchId)).counts.FAILED,1);
+  assert.equal((await call('/internal/device',{userId,deviceId})).status,404);
+});
+
+test('event replacement cancels old-version jobs and schedules only the new version', async () => {
+  const userId='8800', batchId='8801'; await register(userId,sub('version'));
+  const startAt=Date.now()+3_600_000; await replaceEventReminder({batchId,eventId:'8802',userId,startAt,version:1});
+  await replaceEventReminder({batchId,eventId:'8802',userId,startAt:startAt+600_000,version:2});
+  const counts=(await summary(batchId)).counts; assert.equal(counts.CANCELLED,1); assert.equal(counts.PENDING,1);
+});
+
+test('member preference sync replaces that member batch job set idempotently', async () => {
+  const userId='8850',batchId='8851',eventId='8852',due=Date.now()+3_600_000;
+  const makeJob=minutes=>{const id=`event:${eventId}:v1:user:${userId}:before:${minutes}`;return {id,batchId,eventId,version:1,userId,kind:'REMINDER',scheduledAt:due,payload:{id,title:'TimeAlert reminder',body:`Exam starts in ${minutes} minutes`,url:`/?batchId=${batchId}&eventId=${eventId}`}};};
+  const path='/internal/reminders/sync';
+  assert.equal((await call(path,{userId,batchId,jobs:[makeJob(5),makeJob(10)]})).status,200);
+  assert.equal((await call(path,{userId,batchId,jobs:[makeJob(10)]})).status,200);
+  const counts=(await summary(batchId)).counts;assert.equal(counts.CANCELLED,1);assert.equal(counts.PENDING,1);
+});
+
+test('cancellation removes future reminders and schedules one immediate update push', async () => {
+  const userId='8900', batchId='8901'; await register(userId,sub('cancel'));
+  const startAt=Date.now()+3_600_000; await replaceEventReminder({batchId,eventId:'8902',userId,startAt,version:1});
+  mock.get('https://fcm.googleapis.com').intercept({path:'/wp/cancel',method:'POST'}).reply(201,'');
+  const event={title:'Event 8902',type:'EXAM',startAt,timeLabel:'2026-10-30 09:00 (Asia/Colombo)',location:'Room 7',url:`/?batchId=${batchId}&eventId=8902`};
+  const cancelled=await call('/internal/reminders/cancel',{batchId,eventId:'8902',version:2,event,recipients:[userId],reason:'Exam moved'});
+  assert.equal(cancelled.status,200);
+  await new Promise(resolve => setTimeout(resolve, 100)); mock.assertNoPendingInterceptors(); const counts=(await summary(batchId)).counts;
+  const report=await summary(batchId); assert.equal(counts.CANCELLED,1,JSON.stringify(report)); assert.equal(counts.DELIVERED,1,JSON.stringify(report));
 });

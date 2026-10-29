@@ -6,6 +6,8 @@ import com.timealert.repository.EventRepository;
 import com.timealert.repository.UserRepository;
 import com.timealert.security.*;
 import com.timealert.service.BatchService;
+import com.timealert.service.BatchReminderSyncService;
+import com.timealert.service.BatchTimetableService;
 import com.timealert.service.OwnerBootstrapService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,8 @@ class BatchSecurityControllerTests {
     @MockitoBean PasswordEncoder passwordEncoder;
     @MockitoBean OwnerBootstrapService ownerBootstrapService;
     @MockitoBean BatchService batchService;
+    @MockitoBean BatchReminderSyncService reminderSyncService;
+    @MockitoBean BatchTimetableService batchTimetableService;
 
     User owner;
     User rep;

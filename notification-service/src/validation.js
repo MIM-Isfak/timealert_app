@@ -40,7 +40,7 @@ export function validateSubscription(value) {
     keys: { p256dh: value.keys.p256dh, auth: value.keys.auth } };
 }
 
-export async function readJson(request) {
+export async function readJson(request, maxBytes = 8192) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) throw new RequestError(415, 'json_required');
   if (!request.body) throw new RequestError(400, 'invalid_request');
   const reader = request.body.getReader();
@@ -49,7 +49,7 @@ export async function readJson(request) {
     const { value, done } = await reader.read();
     if (done) break;
     length += value.byteLength;
-    if (length > 8192) { await reader.cancel(); throw new RequestError(413, 'request_too_large'); }
+    if (length > maxBytes) { await reader.cancel(); throw new RequestError(413, 'request_too_large'); }
     chunks.push(value);
   }
   const bytes = new Uint8Array(length); let offset = 0;

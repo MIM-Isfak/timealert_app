@@ -651,7 +651,7 @@ function App() {
         <StudentBatchView apiUrl={API_URL} token={token} onToast={addToast} />
       )}
 
-      <NotificationSettings apiUrl={API_URL} token={token} owner={userEmail} isDemo={isDemo} loggingOut={loggingOut} />
+      <NotificationSettings apiUrl={API_URL} token={token} owner={userEmail} isDemo={isDemo} loggingOut={loggingOut} userRole={userRole} />
 
       {/* ── Upload section ────────────────────────────────── */}
       <div className="section-card">

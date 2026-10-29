@@ -28,3 +28,12 @@ test('notification click ignores an external payload destination and focuses sam
   expect(existing.focus).toHaveBeenCalledTimes(1);
   expect(openWindow).not.toHaveBeenCalled();
 });
+test('batch reminder payload is shown and its same-origin timetable URL opens on click', async () => {
+  let pending; const close=jest.fn();
+  handlers.push({ data: { json: () => ({ id: 'batch-event', title: 'TimeAlert reminder', body: 'Midterm (EXAM) at 09:00 in Room 2', url: '/?batchId=12&eventId=77' }) }, waitUntil: promise => { pending=promise; } });
+  await pending;
+  expect(showNotification).toHaveBeenLastCalledWith('TimeAlert reminder',expect.objectContaining({body:'Midterm (EXAM) at 09:00 in Room 2',data:{url:'/?batchId=12&eventId=77'}}));
+  handlers.notificationclick({ notification: { close, data: { url: '/?batchId=12&eventId=77' } }, waitUntil: promise => { pending=promise; } });
+  await pending;
+  expect(existing.navigate).toHaveBeenCalledWith('https://timealert.example/?batchId=12&eventId=77');
+});
