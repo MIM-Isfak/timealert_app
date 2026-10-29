@@ -92,4 +92,24 @@ describe('StudentBatchView', () => {
       expect(screen.getByText(/pending approval/i)).toBeInTheDocument();
     });
   });
+
+  test('approved students see published changes and acknowledge the current version', async () => {
+    axios.get.mockResolvedValueOnce({ data: [{ id: 70, batchId: 10, batchName: 'CS', status: 'APPROVED' }] });
+    axios.get.mockResolvedValueOnce({ data: [{ id: 5, title: 'Algorithms', eventDate: '2027-03-01', startTime: '09:00', endTime: '10:00', status: 'PUBLISHED', version: 2, changeReason: 'Room changed', history: [{ version: 2, action: 'UPDATED', before: 'Room A', after: 'Room B', reason: 'Room changed' }], acknowledged: false }] });
+    axios.post.mockResolvedValueOnce({ data: { acknowledged: true } });
+    render(<StudentBatchView apiUrl={apiUrl} token={token} onToast={onToast} />);
+    expect(await screen.findByText('Algorithms')).toBeInTheDocument();
+    expect(screen.getByText(/changed · room changed/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /got it/i }));
+    await waitFor(() => expect(axios.post).toHaveBeenCalledWith(`${apiUrl}/student/batches/10/timetable/5/acknowledge`, {}, expect.any(Object)));
+    await waitFor(() => expect(screen.getByRole('button', { name: /got it/i })).toBeDisabled());
+  });
+
+  test('pending and rejected students do not request or see batch timetable', async () => {
+    axios.get.mockResolvedValueOnce({ data: [{ id: 70, batchId: 10, batchName: 'Pending batch', status: 'PENDING' }] });
+    render(<StudentBatchView apiUrl={apiUrl} token={token} onToast={onToast} />);
+    await screen.findByText(/pending approval/i);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/published timetable/i)).not.toBeInTheDocument();
+  });
 });

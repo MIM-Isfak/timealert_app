@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import BatchTimetableManagement from './BatchTimetableManagement';
 import {
   Users,
   PlusCircle,
@@ -21,6 +22,7 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [selectedBatchId, setSelectedBatchId] = useState(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -37,7 +39,9 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
       });
       setBatches(res.data);
       if (res.data.length > 0) {
-        fetchRequests(res.data[0].id);
+        const selected = res.data.find(batch => batch.id === selectedBatchId) || res.data[0];
+        setSelectedBatchId(selected.id);
+        fetchRequests(selected.id);
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load batches.';
@@ -45,7 +49,7 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
     } finally {
       setLoading(false);
     }
-  }, [apiUrl, token, onToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiUrl, token, onToast, selectedBatchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRequests = async (batchId) => {
     setRequestsLoading(true);
@@ -83,6 +87,7 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setBatches([res.data]);
+      setSelectedBatchId(res.data.id);
       setName('');
       setAcademicYear('');
       setSemester('');
@@ -150,7 +155,7 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
-  const activeBatch = batches.length > 0 ? batches[0] : null;
+  const activeBatch = batches.find(batch => batch.id === selectedBatchId) || batches[0] || null;
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
   const approvedMembers = requests.filter(r => r.status === 'APPROVED');
 
@@ -239,6 +244,8 @@ export default function RepBatchManagement({ apiUrl, token, onToast }) {
       ) : (
         /* Batch Overview & Requests */
         <div className="batch-active-workspace">
+          {batches.length > 1 && <div className="form-group" style={{ marginBottom: 16 }}><label htmlFor="managed-batch">Select batch to manage</label><select id="managed-batch" className="search-input" value={activeBatch.id} onChange={e => { const id = Number(e.target.value); setSelectedBatchId(id); fetchRequests(id); }}>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>}
+          <BatchTimetableManagement apiUrl={apiUrl} token={token} batchId={activeBatch.id} onToast={onToast} />
           {/* Batch Details Card */}
           <div className="batch-info-banner">
             <div className="batch-info-main">

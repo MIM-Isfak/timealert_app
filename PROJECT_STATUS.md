@@ -76,3 +76,25 @@ npm.cmd run build
 - Schema: Hibernate auto-created `users`, `events`, `batches`, `batch_memberships` tables in isolated test DB.
 - `git diff --check`: no whitespace errors; no secrets found in tracked diff.
 - `.env`, `smoke-*.log`, `frontend/build` confirmed gitignored.
+
+---
+
+## Step 4: Shared Batch Timetable MVP
+
+### Implementation summary
+
+- Added separate `batch_timetable_events`, `batch_event_history`, and `batch_event_acknowledgements` entities and repositories. Batch timetable records do not use personal `events` storage.
+- Added batch-scoped REP APIs for single events, weekly materialized occurrences, import preview, publish, edit, cancellation, history, and current-version acknowledgement counts. Ownership is checked for each management operation, including before import parsing.
+- Student timetable APIs require STUDENT role and APPROVED membership. They return upcoming published and cancelled events; draft events remain private.
+- Event types are `CLASS`, `EXAM`, `DEADLINE`, and `OTHER`. Events retain version and timestamps. Published edits and cancellations keep readable before/after history and reasons. Acknowledgements are version-bound, so earlier versions do not count after a change.
+- Added a non-persisting `FileParserService.parseForBatch` path that uses the existing CSV/Excel/PDF parsers; personal import persistence remains intact. Preview saves only batch DRAFT records and returns parser skips and duplicate reasons.
+- REP workspace now provides timetable creation/repeat, import preview, publish, event editing/cancellation, history, and counts. Approved student view shows published changes, cancellation information, and “Got it”.
+
+### Verified checks
+
+- Backend Maven tests: **48 passed, 0 failed** (including timetable authorization, weekly occurrences, draft visibility, import preview/parser isolation, publish, history/versioning, cancellation, acknowledgement invalidation, and cross-batch rejection).
+- Frontend tests: **36 passed, 0 failed** across 8 suites.
+- Frontend production build: **passed**.
+- Notification-service tests: **13 passed, 0 failed**.
+- Isolated PostgreSQL HTTP smoke test: **passed** on a temporary loopback-only PostgreSQL cluster/database. REP created a batch and draft; draft was hidden from the approved student; publish exposed it; student acknowledged; REP edit advanced to v2 with history and invalidated the old acknowledgement; REP cancellation advanced to v3 and remained visible to the student with cancellation details.
+- Temporary JWT configuration and smoke accounts were generated only for the local process/test database. The isolated PostgreSQL cluster and backend process are stopped and removed after verification.

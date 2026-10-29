@@ -21,7 +21,7 @@ mock.disableNetConnect();
 let mf;
 let options;
 before(async () => {
-  const bundle = await build({ entryPoints: ['src/index.js'], bundle: true, write: false,
+  const bundle = await build({ entryPoints: [resolve('src/index.js')], bundle: true, write: false,
     format: 'esm', external: ['cloudflare:workers'] });
   options = { modules: true, script: bundle.outputFiles[0].text,
     compatibilityDate: '2026-07-30',

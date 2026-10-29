@@ -19,6 +19,7 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
   const [submitting, setSubmitting] = useState(false);
   const [joinError, setJoinError] = useState('');
   const [joinSuccess, setJoinSuccess] = useState('');
+  const [timetable, setTimetable] = useState([]);
 
   const fetchMemberships = useCallback(async () => {
     if (!token) return;
@@ -28,6 +29,11 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMemberships(res.data);
+      const approved = res.data.find(m => m.status === 'APPROVED');
+      if (approved) {
+        const events = await axios.get(`${apiUrl}/student/batches/${approved.batchId}/timetable`, { headers: { Authorization: `Bearer ${token}` } });
+        setTimetable(events.data);
+      } else setTimetable([]);
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load batch membership.';
       if (onToast) onToast('error', 'Membership Error', msg);
@@ -74,6 +80,12 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
 
   const approvedMembership = memberships.find(m => m.status === 'APPROVED');
   const pendingMembership = memberships.find(m => m.status === 'PENDING');
+  const acknowledge = async event => {
+    try {
+      await axios.post(`${apiUrl}/student/batches/${approvedMembership.batchId}/timetable/${event.id}/acknowledge`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setTimetable(items => items.map(item => item.id === event.id ? { ...item, acknowledged: true } : item));
+    } catch (e) { onToast?.('error', 'Could not acknowledge', e.response?.data?.message || 'Please try again.'); }
+  };
 
   return (
     <div className="section-card student-batch-section">
@@ -100,6 +112,7 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
 
       {/* Current Enrolled Batch */}
       {approvedMembership ? (
+        <>
         <div className="student-membership-card approved">
           <div className="membership-card-top">
             <div className="membership-title-row">
@@ -134,6 +147,11 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
             </div>
           </div>
         </div>
+          <div className="members-section" style={{ marginTop: 20 }}>
+            <div className="section-header"><div className="section-icon"><Clock size={15} /></div><h3>Published timetable</h3></div>
+            {timetable.length === 0 ? <div className="management-empty">No upcoming published batch events.</div> : <div className="request-items-list">{timetable.map(event => <article className="request-card" key={event.id}><div className="request-student-details"><strong>{event.title}</strong><span>{event.eventDate} · {event.startTime}–{event.endTime} · {event.location || event.type}</span>{event.status === 'CANCELLED' ? <span className="status-badge done">Cancelled · {event.changeReason || 'No reason provided'}</span> : null}{event.changeReason && event.status === 'PUBLISHED' ? <span className="status-badge soon">Changed · {event.changeReason}</span> : null}{event.history?.map(h => <details key={h.version}><summary>Before / after · {h.action} (v{h.version})</summary><p>Before: {h.before}</p><p>After: {h.after}</p>{h.reason && <p>Reason: {h.reason}</p>}</details>)}</div>{event.status === 'PUBLISHED' && <button className="btn btn-primary btn-sm" onClick={() => acknowledge(event)} disabled={event.acknowledged}>{event.acknowledged ? 'Got it ✓' : 'Got it'}</button>}</article>)}</div>}
+          </div>
+        </>
       ) : pendingMembership ? (
         /* Pending Request Status */
         <div className="student-membership-card pending">
