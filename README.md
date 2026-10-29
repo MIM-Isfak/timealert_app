@@ -1,5 +1,7 @@
 # TimeAlert
 
+Web Push foundation (optional): see [notification-service setup, contracts, and tests](notification-service/README.md).
+
 > **Smart timetable reminders, right in your inbox.**
 
 TimeAlert is a full-stack web application that lets students and professionals upload their class or work timetable (CSV, Excel, or PDF) and automatically receive email reminders at 30, 20, and 10 minutes before each event starts. Users authenticate with a secure JWT-based account, manage their schedule from a clean React dashboard, and can try the app instantly via a no-signup guest demo.

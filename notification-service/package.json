@@ -1,0 +1,19 @@
+{
+  "name": "timealert-notification-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "wrangler dev --local --ip 127.0.0.1 --port 8787",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "setup:local": "node scripts/setup-local.js"
+  },
+  "dependencies": { "@block65/webcrypto-web-push": "2.0.0" },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "4.20260730.0",
+    "wrangler": "4.155.0"
+  }
+}

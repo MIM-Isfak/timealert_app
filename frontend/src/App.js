@@ -17,6 +17,8 @@ import {
   Layers,
 } from 'lucide-react';
 import './App.css';
+import NotificationSettings from './NotificationSettings';
+import { disconnectPush } from './pushClient';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 if (!process.env.REACT_APP_API_URL) {
@@ -127,6 +129,7 @@ function App() {
     catch { return false; }
   });
   const [now,         setNow]         = useState(new Date());
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const { toasts, addToast, dismissToast } = useToasts();
   const fileInputRef = useRef(null);
@@ -146,8 +149,11 @@ function App() {
     }
   }, [token]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    setLoggingOut(true);
+    // Invalidate pending Enable actions in other tabs before asynchronous device cleanup.
     localStorage.removeItem('token');
+    try { await disconnectPush(API_URL, token, userEmail); } catch { /* Logout always completes. */ }
     localStorage.removeItem('email');
     localStorage.removeItem('name');
     localStorage.removeItem('isDemo');
@@ -156,7 +162,8 @@ function App() {
     setUserName('');
     setIsDemo(false);
     setEvents([]);
-  }, []);
+    setLoggingOut(false);
+  }, [token, userEmail]);
 
   const fetchEvents = useCallback(async () => {
     if (!token) return;
@@ -587,6 +594,7 @@ function App() {
           <button
             className="icon-btn danger"
             onClick={handleLogout}
+            disabled={loggingOut}
             title="Log out"
           >
             <LogOut size={15} />
@@ -599,6 +607,8 @@ function App() {
           👋 You're in guest demo mode — sample data only, no real emails are sent. Sign up for a real account to get live notifications.
         </div>
       )}
+
+      <NotificationSettings apiUrl={API_URL} token={token} owner={userEmail} isDemo={isDemo} loggingOut={loggingOut} />
 
       {/* ── Upload section ────────────────────────────────── */}
       <div className="section-card">

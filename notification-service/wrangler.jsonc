@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "timealert-notifications",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [{ "name": "PUSH_STORE", "class_name": "PushStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PushStore"] }],
+  "env": {
+    "test": {
+      "name": "timealert-notifications-test",
+      "workers_dev": true,
+      "durable_objects": {
+        "bindings": [{ "name": "PUSH_STORE", "class_name": "PushStore" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PushStore"] }]
+    }
+  }
+}
