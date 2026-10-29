@@ -241,12 +241,14 @@ export class PushStore extends DurableObject {
       job.id, job.batchId, job.eventId, job.version, job.userId, job.kind, job.scheduledAt, JSON.stringify(job.payload), now, now);
   }
   async scheduleNextAlarm() {
+    if (this.env.REMINDER_DELIVERY_ENABLED === 'false') { await this.ctx.storage.deleteAlarm(); return; }
     const row = this.sql.exec(`SELECT MIN(CASE WHEN state='PENDING' THEN scheduled_at WHEN state='RETRY' THEN next_retry_at END) AS due
       FROM reminder_jobs WHERE state IN ('PENDING','RETRY')`).one();
     if (row.due == null) await this.ctx.storage.deleteAlarm(); else await this.ctx.storage.setAlarm(row.due);
   }
   async alarm() { await this.ready; await this.runAlarm(Date.now()); }
   async runAlarm(now) {
+    if (this.env.REMINDER_DELIVERY_ENABLED === 'false') { await this.ctx.storage.deleteAlarm(); return; }
     // PROCESSING jobs left by a terminated execution are made retryable. Per-device state
     // prevents sending again to devices whose provider already accepted the notification.
     this.sql.exec(`UPDATE reminder_jobs SET state='RETRY', next_retry_at=?, updated_at=?, error_code='interrupted'

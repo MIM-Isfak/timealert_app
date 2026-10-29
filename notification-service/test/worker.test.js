@@ -240,3 +240,19 @@ test('cancellation removes future reminders and schedules one immediate update p
   await new Promise(resolve => setTimeout(resolve, 100)); mock.assertNoPendingInterceptors(); const counts=(await summary(batchId)).counts;
   const report=await summary(batchId); assert.equal(counts.CANCELLED,1,JSON.stringify(report)); assert.equal(counts.DELIVERED,1,JSON.stringify(report));
 });
+
+test('paused test environment retains jobs without arming or executing delivery alarms', async () => {
+  const runtime = new Miniflare({ ...options, bindings: { ...options.bindings, REMINDER_DELIVERY_ENABLED: 'false' } });
+  const invoke = (path, body, method='POST') => runtime.dispatchFetch('http://worker/internal/reminders/' + path, {
+    method, headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  try {
+    const id='event:9902:v1:user:9900:before:5';
+    const job={id,batchId:'9901',eventId:'9902',userId:'9900',version:1,kind:'REMINDER',scheduledAt:Date.now()-1000,payload:{id,title:'Paused',body:'No outgoing push',url:'/'}};
+    assert.equal((await invoke('schedule',job)).status,200);
+    await invoke('_alarm',{now:Date.now()+60_000});
+    const report=await (await invoke('summary?batchId=9901',null,'GET')).json();
+    assert.equal(report.counts.PENDING,1);assert.equal(report.counts.FAILED,0);assert.equal(report.nextAlarmAt,null);
+  } finally { await runtime.dispose(); }
+});

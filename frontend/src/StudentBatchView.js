@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { groupBatchEvents, countdownLabel } from './batchEventTime';
 import {
   GraduationCap,
   CheckCircle2,
@@ -20,6 +21,9 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
   const [joinError, setJoinError] = useState('');
   const [joinSuccess, setJoinSuccess] = useState('');
   const [timetable, setTimetable] = useState([]);
+  const [view, setView] = useState('upcoming');
+  const [now, setNow] = useState(() => new Date());
+  const [exporting, setExporting] = useState(false);
 
   const fetchMemberships = useCallback(async () => {
     if (!token) return;
@@ -31,7 +35,7 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
       setMemberships(res.data);
       const approved = res.data.find(m => m.status === 'APPROVED');
       if (approved) {
-        const events = await axios.get(`${apiUrl}/student/batches/${approved.batchId}/timetable`, { headers: { Authorization: `Bearer ${token}` } });
+        const events = await axios.get(`${apiUrl}/student/batches/${approved.batchId}/timetable?view=week`, { headers: { Authorization: `Bearer ${token}` } });
         setTimetable(events.data);
       } else setTimetable([]);
     } catch (err) {
@@ -80,6 +84,27 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
 
   const approvedMembership = memberships.find(m => m.status === 'APPROVED');
   const pendingMembership = memberships.find(m => m.status === 'PENDING');
+  useEffect(() => {
+    if (!approvedMembership) return;
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [approvedMembership]);
+  const groups = groupBatchEvents(timetable, now, approvedMembership?.timezone || 'Asia/Colombo');
+  const visibleTimetable = groups[view];
+  const exportCalendar = async () => {
+    setExporting(true);
+    try {
+      const response = await axios.get(`${apiUrl}/student/batches/${approvedMembership.batchId}/timetable.ics`, {
+        headers: { Authorization: `Bearer ${token}` }, responseType: 'blob',
+      });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url; link.download = `timealert-batch-${approvedMembership.batchId}.ics`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { onToast?.('error', 'Calendar export failed', 'Your approved membership is required. Refresh and try again.'); }
+    finally { setExporting(false); }
+  };
   const acknowledge = async event => {
     try {
       await axios.post(`${apiUrl}/student/batches/${approvedMembership.batchId}/timetable/${event.id}/acknowledge`, {}, { headers: { Authorization: `Bearer ${token}` } });
@@ -149,7 +174,13 @@ export default function StudentBatchView({ apiUrl, token, onToast }) {
         </div>
           <div className="members-section" style={{ marginTop: 20 }}>
             <div className="section-header"><div className="section-icon"><Clock size={15} /></div><h3>Published timetable</h3></div>
-            {timetable.length === 0 ? <div className="management-empty">No upcoming published batch events.</div> : <div className="request-items-list">{timetable.map(event => <article className="request-card" key={event.id}><div className="request-student-details"><strong>{event.title}</strong><span>{event.eventDate} · {event.startTime}–{event.endTime} · {event.location || event.type}</span>{event.status === 'CANCELLED' ? <span className="status-badge done">Cancelled · {event.changeReason || 'No reason provided'}</span> : null}{event.changeReason && event.status === 'PUBLISHED' ? <span className="status-badge soon">Changed · {event.changeReason}</span> : null}{event.history?.map(h => <details key={h.version}><summary>Before / after · {h.action} (v{h.version})</summary><p>Before: {h.before}</p><p>After: {h.after}</p>{h.reason && <p>Reason: {h.reason}</p>}</details>)}</div>{event.status === 'PUBLISHED' && <button className="btn btn-primary btn-sm" onClick={() => acknowledge(event)} disabled={event.acknowledged}>{event.acknowledged ? 'Got it ✓' : 'Got it'}</button>}</article>)}</div>}
+            <p className="section-subtitle">Batch timezone: {approvedMembership.timezone || 'Asia/Colombo'}. Calendar exports are snapshots; export again after changes.</p>
+            <p aria-live="off">{groups.next ? <>Next: <strong>{groups.next.title}</strong> in {countdownLabel(groups.next.startsAt, now)}</> : 'No next event scheduled.'}</p>
+            <div className="notification-actions" style={{ flexWrap: 'wrap', justifyContent: 'flex-start', marginBottom: 16 }}>
+              {[['upcoming','Upcoming'],['today','Today'],['week','This week']].map(([key,label]) => <button key={key} className="btn btn-secondary btn-sm" aria-pressed={view === key} onClick={() => setView(key)}>{label}</button>)}
+              <button className="btn btn-secondary btn-sm" disabled={exporting} onClick={exportCalendar}>{exporting ? 'Exporting…' : 'Export calendar (.ics)'}</button>
+            </div>
+            {visibleTimetable.length === 0 ? <div className="management-empty">No upcoming published batch events.</div> : <div className="request-items-list">{visibleTimetable.map(event => <article className="request-card" key={event.id}><div className="request-student-details"><strong>{event.title}</strong><span>{event.eventDate} · {event.startTime}–{event.endTime} · {event.location || event.type}</span>{event.status === 'CANCELLED' ? <span className="status-badge done">Cancelled · {event.changeReason || 'No reason provided'}</span> : null}{event.changeReason && event.status === 'PUBLISHED' ? <span className="status-badge soon">Changed · {event.changeReason}</span> : null}{event.history?.map(h => <details key={h.version}><summary>Before / after · {h.action} (v{h.version})</summary><p>Before: {h.before}</p><p>After: {h.after}</p>{h.reason && <p>Reason: {h.reason}</p>}</details>)}</div>{event.status === 'PUBLISHED' && <button className="btn btn-primary btn-sm" onClick={() => acknowledge(event)} disabled={event.acknowledged}>{event.acknowledged ? 'Got it ✓' : 'Got it'}</button>}</article>)}</div>}
           </div>
         </>
       ) : pendingMembership ? (

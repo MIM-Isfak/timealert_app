@@ -87,7 +87,13 @@ public class BatchTimetableService {
         BatchEventAcknowledgement a=acknowledgements.findByEventIdAndStudentId(id,student.getId()).orElseGet(BatchEventAcknowledgement::new); a.setEvent(e); a.setStudent(student); a.setVersion(e.getVersion()); a.setAcknowledgedAt(LocalDateTime.now()); acknowledgements.save(a); return true;
     }
     @Transactional(readOnly=true) public List<BatchTimetableEvent> forRep(User rep, Long batchId) { Batch b=batch(batchId); owner(rep,b); return events.findByBatchIdOrderByEventDateAscStartTimeAsc(batchId); }
-    @Transactional(readOnly=true) public List<BatchTimetableEvent> forStudent(User student, Long batchId) { Batch b=batch(batchId); student(student,b); return events.findByBatchIdOrderByEventDateAscStartTimeAsc(batchId).stream().filter(e -> !e.getEventDate().isBefore(LocalDate.now()) && e.getStatus()!=BatchEventStatus.DRAFT).toList(); }
+    @Transactional(readOnly=true) public List<BatchTimetableEvent> forStudent(User student, Long batchId) { return forStudent(student,batchId,false); }
+    @Transactional(readOnly=true) public List<BatchTimetableEvent> forStudent(User student, Long batchId, boolean week) {
+        Batch b=batch(batchId); student(student,b);
+        LocalDate today=LocalDate.now(ZoneId.of(b.getTimezone()));
+        LocalDate from=week ? today.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) : today;
+        return events.findByBatchIdOrderByEventDateAscStartTimeAsc(batchId).stream().filter(e -> !e.getEventDate().isBefore(from) && e.getStatus()!=BatchEventStatus.DRAFT).toList();
+    }
     @Transactional(readOnly=true) public List<BatchEventHistory> history(User rep,Long batchId,Long id) { Batch b=batch(batchId); owner(rep,b); return history.findByEventIdOrderByVersionDesc(event(batchId,id).getId()); }
     @Transactional(readOnly=true) public List<BatchEventHistory> historyForStudent(User student,Long batchId,Long id) { Batch b=batch(batchId); student(student,b); return history.findByEventIdOrderByVersionDesc(event(batchId,id).getId()); }
     @Transactional(readOnly=true) public long ackCount(User rep,Long batchId,Long id) { Batch b=batch(batchId); owner(rep,b); BatchTimetableEvent e=event(batchId,id); return acknowledgements.countByEventIdAndVersion(id,e.getVersion()); }

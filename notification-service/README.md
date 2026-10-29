@@ -3,7 +3,9 @@
 This service owns browser device subscriptions in a **SQLite-backed Durable Object**.
 React talks only to Spring Boot; Spring authenticates the JWT, resolves the database
 user's stable `users.id`, and calls the Worker with a server-only credential.
-No notification scheduling, alarms, queues, or email changes are included.
+SQLite reminder jobs and per-device acceptance state are persisted here. Durable
+Object alarms wake for the next due job independently of Spring and the page.
+Spring synchronizes event versions, approved membership and reminder preferences.
 
 The pinned `@block65/webcrypto-web-push` **2.0.0** library handles RFC 8291
 `aes128gcm` encryption and RFC 8292 VAPID using Web Crypto. Version 1.x uses an old
@@ -78,6 +80,7 @@ $env:SPRING_APPLICATION_JSON = @{
     'spring.mail.username' = ''
     'spring.mail.password' = ''
     'management.health.mail.enabled' = $false
+    'legacy.email-reminders.enabled' = $false
     'jwt.secret' = $backendConfig.JWT_SECRET
     'server.address' = '127.0.0.1'
     'server.port' = 8081
@@ -168,6 +171,15 @@ Internal Worker routes require `Authorization: Bearer <server credential>`:
 `GET /health` is public and returns only `{"status":"UP"}`; it does not claim VAPID
 setup or device delivery readiness. Do not enable request/body/header logging.
 
+The `test` environment sets `REMINDER_DELIVERY_ENABLED=false`: jobs remain pending
+and alarms are disarmed so deployment checks do not release queued reminders.
+Manual test pushes remain a separate operation; do not call them during release
+verification. Resuming reminders requires an authorized change to `true`, deployment
+and resynchronization. The prepared `pilot` environment has its own namespace with
+alarms enabled. Provision its own four secrets after account confirmation; never
+mix subscriptions/user IDs between test databases and Neon. See the
+[pilot checklist](../README.md).
+
 The allowlist accepts HTTPS endpoints from `fcm.googleapis.com` (`/fcm/send/` and
 `/wp/`), `updates.push.services.mozilla.com` (`/wpush/`), and Apple's documented
 `*.push.apple.com`. Credentials, query strings, ports, fragments, unknown providers,
@@ -187,7 +199,7 @@ inspected. Removing them is an idempotent no-op, without revealing ownership.
 
 The service worker always uses `showNotification` in foreground and background;
 React does not emit a second toast for incoming pushes. Notification clicks open
-the fixed same-origin app root. It has no API fetch/cache handler and stores no
+the validated same-origin timetable URL or app root. It has no API fetch/cache handler and stores no
 JWTs. Only a device ID/account label is stored by the page for local selection.
 
 ## Validation and hosted phone test
@@ -213,13 +225,15 @@ VAPID keys, and OS/browser support. On iPhone/iPad, install the HTTPS app on the
 Home Screen and open it there; the UI uses Push/Notifications/Service Worker and
 standalone-display capability checks rather than user-agent sniffing. Browser
 and OS policies may delay/suppress notifications. Local mocked tests and localhost
-checks do not prove phone background delivery. Scheduling remains out of scope.
+checks do not prove phone background delivery. Scheduling is persisted in SQLite;
+provider acceptance is not device delivery and there is no exact-second guarantee.
 
-The next hosted task is to provision an isolated HTTPS test environment for this
-slice, then register a synthetic account on a phone, enable notifications, close
-the app, send a test to that selected phone device, and record OS notification
-arrival and safe click behavior. Cloud deployment requires a separate task; none
-is performed by the build or tests in this step.
+Release verification may update the existing test Worker after checking account
+authentication and existing secret names, then probe health and unauthorized
+access only. Build/test commands do not deploy. Real phone verification requires
+separate approval: use the isolated pilot environment, enable notifications, close
+the app, and record notification arrival/click behavior. No health or bundling
+check confirms device delivery.
 
 ## Official references consulted
 

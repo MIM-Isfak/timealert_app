@@ -80,11 +80,11 @@ public class GlobalExceptionHandler {
 
     /**
      * Catch-all handler for any unhandled exception.
-     * Logs the full stack trace server-side but returns a safe, generic message to the client.
+     * Logs only the exception category; provider/connection messages can contain private values.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception ex) {
-        logger.error("Unhandled exception: {}", ex.getMessage(), ex);
+        logger.error("Unhandled request failure ({})", ex.getClass().getSimpleName());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "An unexpected error occurred. Please try again later."));
     }

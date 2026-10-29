@@ -12,6 +12,16 @@
     "test": {
       "name": "timealert-notifications-test",
       "workers_dev": true,
+      "vars": { "REMINDER_DELIVERY_ENABLED": "false" },
+      "durable_objects": {
+        "bindings": [{ "name": "PUSH_STORE", "class_name": "PushStore" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PushStore"] }]
+    },
+    "pilot": {
+      "name": "timealert-notifications-pilot",
+      "workers_dev": true,
+      "vars": { "REMINDER_DELIVERY_ENABLED": "true" },
       "durable_objects": {
         "bindings": [{ "name": "PUSH_STORE", "class_name": "PushStore" }]
       },

@@ -4,6 +4,7 @@ import com.timealert.model.*;
 import com.timealert.repository.UserRepository;
 import com.timealert.service.BatchTimetableService;
 import com.timealert.service.FileParserService;
+import com.timealert.service.BatchCalendarService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
@@ -17,9 +18,14 @@ public class BatchTimetableController {
     @Autowired private BatchTimetableService service;
     @Autowired private FileParserService parser;
     @Autowired private UserRepository users;
+    @Autowired private BatchCalendarService calendar;
     private User user(Authentication auth) { return auth == null ? null : users.findByEmail(auth.getName()).orElse(null); }
     private Map<String,Object> dto(BatchTimetableEvent e, boolean rep, User viewer) {
         Map<String,Object> m=new LinkedHashMap<>(); m.put("id",e.getId()); m.put("batchId",e.getBatch().getId()); m.put("title",e.getTitle()); m.put("description",e.getDescription()); m.put("eventDate",e.getEventDate()); m.put("startTime",e.getStartTime()); m.put("endTime",e.getEndTime()); m.put("location",e.getLocation()); m.put("type",e.getType()); m.put("status",e.getStatus()); m.put("version",e.getVersion()); m.put("seriesId",e.getSeriesId()); m.put("createdAt",e.getCreatedAt()); m.put("updatedAt",e.getUpdatedAt()); m.put("changeReason",e.getChangeReason()); m.put("notificationSetupPending",e.isNotificationSetupPending());
+        var zone=java.time.ZoneId.of(e.getBatch().getTimezone());
+        m.put("timezone",zone.getId());
+        m.put("startsAt",java.time.LocalDateTime.of(e.getEventDate(),e.getStartTime()).atZone(zone).toInstant().toString());
+        m.put("endsAt",java.time.LocalDateTime.of(e.getEventDate(),e.getEndTime()).atZone(zone).toInstant().toString());
         if(rep) { m.put("acknowledgementCount",service.ackCount(viewer,e.getBatch().getId(),e.getId())); m.put("history",service.history(viewer,e.getBatch().getId(),e.getId()).stream().map(this::historyDto).toList()); }
         else { m.put("acknowledged",e.getStatus()==BatchEventStatus.PUBLISHED && service.hasAck(viewer,e.getBatch().getId(),e.getId())); m.put("history",service.historyForStudent(viewer,e.getBatch().getId(),e.getId()).stream().map(this::historyDto).toList()); }
         return m;
@@ -48,7 +54,17 @@ public class BatchTimetableController {
     @PostMapping("/batches/{batchId}/timetable/{eventId}/cancel")
     public Map<String,Object> cancel(@PathVariable Long batchId,@PathVariable Long eventId,@RequestBody Map<String,String> body,Authentication auth) { User u=user(auth); return dto(service.cancel(u,batchId,eventId,body==null?null:body.get("reason")),true,u); }
     @GetMapping("/student/batches/{batchId}/timetable")
-    public List<Map<String,Object>> studentList(@PathVariable Long batchId,Authentication auth) { User u=user(auth); return service.forStudent(u,batchId).stream().map(e->dto(e,false,u)).toList(); }
+    public List<Map<String,Object>> studentList(@PathVariable Long batchId,@RequestParam(defaultValue="upcoming") String view,Authentication auth) {
+        if(!Set.of("upcoming","week").contains(view)) throw new IllegalArgumentException("View must be upcoming or week.");
+        User u=user(auth); return service.forStudent(u,batchId,view.equals("week")).stream().map(e->dto(e,false,u)).toList();
+    }
+    @GetMapping("/student/batches/{batchId}/timetable.ics")
+    public ResponseEntity<byte[]> exportCalendar(@PathVariable Long batchId,Authentication auth) {
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_TYPE,"text/calendar; charset=UTF-8")
+                .header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"timealert-batch-"+batchId+".ics\"")
+                .header(HttpHeaders.CACHE_CONTROL,"private, no-store")
+                .body(calendar.export(user(auth),batchId));
+    }
     @PostMapping("/student/batches/{batchId}/timetable/{eventId}/acknowledge")
     public Map<String,Object> acknowledge(@PathVariable Long batchId,@PathVariable Long eventId,Authentication auth) { User u=user(auth); service.acknowledge(u,batchId,eventId); return Map.of("acknowledged",true); }
 }

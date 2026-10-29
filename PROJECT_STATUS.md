@@ -1,6 +1,6 @@
 # TimeAlert project handover
 
-Branch: `feature/timealert-student-alerts`. Step 2 adds a React notification settings panel and service worker, authenticated Spring push endpoints, and a Cloudflare Worker backed by a SQLite Durable Object. The Worker owns subscriptions by stable user ID; Spring bridges authenticated requests. Test pushes target one selected device. Scheduling is out of scope.
+Branch: `feature/timealert-student-alerts`. The shared timetable and durable reminder engine are implemented. The free public pilot release is prepared for Cloudflare Pages, Render Free, Neon Free, and an isolated Cloudflare SQLite Durable Object Worker. See Step 6 for current checks and the account-confirmation boundary; earlier sections record previous checkpoints.
 
 ## Completed checks
 
@@ -122,3 +122,42 @@ npm.cmd run build
 ### Live verification boundary
 
 - No Cloudflare deployment, Durable Object production migration, live push request, or production subscription test was performed. Provider acceptance is not confirmed device delivery. Live Worker alarm operation and real-device reminder timing remain to be verified after a separately authorized deployment.
+
+---
+
+## Step 6: Free public pilot release preparation
+
+### Release changes
+
+- Added a non-root Java 17 Docker build and Render Free Web Service Blueprint with auto-deploy disabled, the feature branch selected, and `/actuator/health`. No Render database resource is defined. Docker's build context excludes local environment files and credentials.
+- Added an explicit `pilot` Spring profile: Render `PORT` binding on `0.0.0.0`, required environment-based credentials, SSL PostgreSQL URL validation for Neon, three database connections, a single exact HTTPS frontend origin, safe error responses/logging, and no SMTP health dependency. `LEGACY_EMAIL_REMINDERS_ENABLED=false` prevents the legacy email service and its scheduled database polling from being registered. The default/local profile can still opt into personal email behavior.
+- Added Cloudflare Pages build instructions/configuration for Create React App (`frontend`, Node 22, output `build`), an HTTPS API URL preflight using `REACT_APP_API_URL`, SPA routing/browser headers, and source-map-free pilot builds.
+- Added a live next-event countdown, batch-timezone today/current-week filters, and an authenticated `.ics` snapshot export. The export reuses approved-membership authorization, omits drafts, uses stable IDs/version sequences and UTC times, retains cancellation status, escapes calendar text, and folds Unicode lines safely. No public calendar URL, access token, or calendar alarm is introduced.
+- Preserved private Worker configuration: Spring `PUSH_SERVICE_SECRET` matches Worker `INTERNAL_API_SECRET`. Added a separate undeployed `pilot` namespace configuration. The existing `test` environment pauses reminder alarms with `REMINDER_DELIVERY_ENABLED=false`; manual test pushes are not invoked during release verification.
+- Main and component READMEs now describe the account/deployment sequence, Render cold starts, quota limits, internet requirements, lack of an exact-second guarantee, and provider acceptance versus confirmed device delivery.
+
+### Verified results
+
+- Backend: **69 tests passed, 0 failed**; Maven `package` produced the executable Spring Boot JAR. New tests cover Render/profile properties, SSL requirements, disabled legacy scheduling without SMTP, exact production CORS, calendar authentication/approval/cross-batch denial, UTC content, cancellation/version information, injection escaping, and Unicode folding.
+- Frontend: **47 tests passed, 0 failed** across 11 suites; `build:pilot` production build **passed** using an execution-only illustrative HTTPS API URL. Missing and localhost API URLs were rejected. New coverage includes timezone midnight/week boundaries, next-event selection/countdown, view switching, authenticated calendar download and failed authorization.
+- Worker: **24 tests passed, 0 failed**, with all outgoing push requests mocked. The added pause test verifies jobs are retained without arming/executing delivery alarms.
+- Wrangler `--env test --dry-run` and `--env pilot --dry-run`: **passed**, each estimating **40.05 KiB** upload (10.12 KiB gzip). The pilot environment was not deployed.
+- Gitleaks redacted staged scan: **no leaks found**. `git diff --check` and staged whitespace check: **passed**.
+- No PostgreSQL smoke database or temporary application server was needed or created for this release step. No production users or real notifications were created/sent. Local Maven packaging does not verify the Docker image or a live Render/Neon connection.
+
+### Existing test Worker update
+
+- Existing Cloudflare OAuth authentication was available; read-only inspection confirmed all four required test Worker secret names. No secret values were read or changed.
+- Updated only `timealert-notifications-test`, preserving its existing SQLite namespace/secrets, with reminder delivery paused.
+- URL: `https://timealert-notifications-test.timealert-notification-service.workers.dev`.
+- Deployed version: `a9092574-7c08-4b00-bc91-f49dd4c789e6`.
+- Live checks: `/health` → **200**, body `{"status":"UP"}`; `/internal/public-key` with missing authentication → **401**, and invalid authentication → **401**, both body `{"status":"unauthorized"}`. These checks do not claim VAPID delivery readiness or access student data.
+
+### Remaining account actions, in order
+
+1. Confirm Cloudflare/Render/Neon accounts, project/service/database names and region, final Pages origin, owner bootstrap email, and release commit.
+2. After approval, reserve the Pages project without publishing to establish its origin; create/select Neon Free storage and privately configure/deploy the isolated pilot Worker with its own four secrets. Do not point a new database at the test subscription namespace.
+3. Deploy Render from the reviewed Blueprint with Neon SSL credentials, strong JWT secret, exact Pages origin, and the pilot Worker URL/shared secret; verify health and CORS. No SMTP configuration is needed.
+4. Configure Pages with the final `REACT_APP_API_URL` and deploy the approved frontend build, then separately authorize real-user/device verification. No frontend, backend, database, or pilot Worker resource was deployed in this step.
+
+Public pilot deployment remains blocked on those account choices, private configuration, and explicit confirmation. Live Render startup/Neon SSL, Pages origins, and real-device reminder timing remain unverified.

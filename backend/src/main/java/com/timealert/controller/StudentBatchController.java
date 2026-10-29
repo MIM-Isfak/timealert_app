@@ -44,6 +44,7 @@ public class StudentBatchController {
         map.put("id", m.getId());
         map.put("batchId", m.getBatch().getId());
         map.put("batchName", m.getBatch().getName());
+        map.put("timezone", m.getBatch().getTimezone());
         map.put("academicYear", m.getBatch().getAcademicYear() != null ? m.getBatch().getAcademicYear() : "");
         map.put("semester", m.getBatch().getSemester() != null ? m.getBatch().getSemester() : "");
         map.put("repName", m.getBatch().getRep() != null && m.getBatch().getRep().getName() != null

@@ -76,7 +76,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         // Parse comma-separated origins, trimming whitespace from each entry.
-        // ALLOWED_ORIGINS env var must be set in production (e.g. https://your-app.vercel.app).
+        // The pilot validates that this is the single final HTTPS Pages origin.
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
